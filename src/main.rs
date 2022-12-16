@@ -60,7 +60,7 @@ fn decode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
 fn main() {
     let mut commands = load::read_from_file("queries.txt");
     let mut cache = cache::CacheModel::with(500, true);
-    let command_num = commands.len();
+    let command_num = commands.len() as u32;
     println!("find {} commands.", command_num);
 
     let now = Instant::now();
@@ -76,8 +76,7 @@ fn main() {
     }
 
     let elapsed = now.elapsed();
-    let preprocess_time = elapsed.as_micros() as u64;
-    let average_time = preprocess_time as f64 / command_num as f64;
-    println!("We handled {} commands in {} microsecs.", command_num, preprocess_time);
-    println!("On average, one command takes {:.2} microsecs.", average_time);
+    println!("We handled {} commands in {:?}.", command_num, elapsed);
+    println!("On average, one command takes {:?}.", elapsed/command_num);
+    // println!("On average, one command takes {:.2} microsecs.", average_time);
 }
