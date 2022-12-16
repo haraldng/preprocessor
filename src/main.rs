@@ -13,7 +13,7 @@ fn encode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
     if let Some(index) = cache.get_index_of(cache_key.clone()) {
         // exists in cache
         // send index and parameters
-        let compressed = format!("1*|*{}*|*{}", index.to_string(), parameters);
+        let compressed = format!("1*|*{}*|*{}", index, parameters);
 
         command.sql = compressed;
     } else {
@@ -58,13 +58,13 @@ fn decode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
 }
 
 fn main() {
-    let mut commands = load::read_from_file("queries.txt");
+    let commands = load::read_from_file("queries.txt");
     let mut cache = cache::CacheModel::with(500, true);
     let command_num = commands.len() as u32;
     println!("find {} commands.", command_num);
 
     let now = Instant::now();
-    /// run with checks
+    // run with checks
     for command in commands.into_iter() {
         let mut raw_command = command.clone();
         encode(&mut raw_command, &mut cache);

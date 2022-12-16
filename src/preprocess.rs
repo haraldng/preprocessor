@@ -24,8 +24,8 @@ pub fn split_query(query: &str) -> (String, String) {
             if bitmap[index] == 1 {
                 continue
             } else {
-                for i in index..index+mat.len() {
-                    bitmap[i] = 1;
+                for bitmap_entry in bitmap.iter_mut().skip(index).take(mat.len()) {
+                    *bitmap_entry = 1;
                 }
             }
 
@@ -56,11 +56,11 @@ pub fn merge_query(template: String, parameters: String) -> String {
     if parameters.is_empty() { return template; }
 
     let parameter_list = parameters
-        .split(",")
+        .split(',')
         .collect::<Vec<_>>();
     let num_parameters = parameter_list.len();
 
-    let parts = template.split("@").collect::<Vec<_>>();
+    let parts = template.split('@').collect::<Vec<_>>();
     if  parts.len() != num_parameters+1 {
         println!("Unmatched templates {} \n and parameters {}", template, parameters);
         return template;
