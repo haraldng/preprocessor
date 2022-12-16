@@ -1,4 +1,3 @@
-use std::hash::Hash;
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use lfu_cache::LfuCache;
@@ -49,10 +48,8 @@ impl CacheModel
             if let Some(_value) = self.lfu_cache.get(&key) {
                 return self.index_cache.get_index_of(&key)
             }
-        } else {
-            if let Some(_value) = self.lru_cache.get(&key) {
-                return self.index_cache.get_index_of(&key)
-            } 
+        } else if let Some(_value) = self.lru_cache.get(&key) {
+            return self.index_cache.get_index_of(&key)
         }
 
         None
