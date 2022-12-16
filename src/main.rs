@@ -3,80 +3,60 @@ mod cache;
 mod preprocess;
 
 use std::time::Instant;
-
-fn encode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
-    // split sql into template and parameters
-    let (template, parameters) = preprocess::split_query(&command.sql);
-    let cache_key: cache::CacheKey = template.clone();
-    let cache_value: cache::CacheValue = template.clone();
-
-    if let Some(index) = cache.get_index_of(cache_key.clone()) {
-        // exists in cache
-        // send index and parameters
-        let compressed = format!("1*|*{}*|*{}", index, parameters);
-
-        command.sql = compressed;
-    } else {
-        // send template and parameters
-        let uncompressed = format!("0*|*{}*|*{}", template, parameters);
-
-        command.sql = uncompressed;
-    }
-
-    // update cache for leader
-    cache.put(cache_key, cache_value);
-}
-
-fn decode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
-    let parts: Vec<&str> = command.sql.split("*|*").collect();
-    if parts.len() != 3 { 
-        panic!("Unexpected query: {:?}", command.sql);
-    }
-
-    let (compressed, index_or_template, parameters) = (parts[0], parts[1].to_string(), parts[2].to_string());
-    let mut template = index_or_template.clone();
-
-    if compressed == "1" {
-        // compressed messsage
-        let index = index_or_template.parse::<usize>().unwrap();
-        if let Some((_key, value)) = cache.get_with_index(index) {
-            template = value.clone();
-        } else { 
-            let index = index;
-            let sql = command.sql.clone();
-            let size = cache.len();
-
-            panic!("Query:{} is out of index: {}/{:?}", sql, index, size);
-        }
-    }
-
-    // update cache for followers
-    let cache_key: cache::CacheKey = template.clone();
-    let cache_value: cache::CacheValue = template.clone();
-    cache.put(cache_key, cache_value);
-    command.sql = preprocess::merge_query(template, parameters);
-}
+use histogram::Histogram;
+use crate::preprocess::{decode, encode};
 
 fn main() {
     let commands = load::read_from_file("queries.txt");
     let mut cache = cache::CacheModel::with(500, true);
-    let command_num = commands.len() as u32;
-    println!("find {} commands.", command_num);
+    let num_commands = commands.len();
+    println!("Total number of commands: {}", num_commands);
 
-    let now = Instant::now();
+    let mut encode_histo = Histogram::new();
+    let mut decode_histo = Histogram::new();
+    let mut query_len_histo = Histogram::new();
+
+
     // run with checks
-    for command in commands.into_iter() {
+    for command in &commands[0..] {
         let mut raw_command = command.clone();
+        let start = Instant::now();
         encode(&mut raw_command, &mut cache);
+        let encode_end = Instant::now();
         decode(&mut raw_command, &mut cache);
+        let decode_end = Instant::now();
 
-        // this adds a small overhead for benchmark
-        // but it allows us to double check the correctness of encode/decode procedure
-        assert!(raw_command.sql == command.sql);
+        assert_eq!(raw_command.sql, command.sql);
+
+        let encode_time = encode_end.duration_since(start).as_nanos();
+        let decode_time = decode_end.duration_since(encode_end).as_nanos();
+        encode_histo.increment(encode_time as u64).unwrap();
+        decode_histo.increment(decode_time as u64).unwrap();
+        query_len_histo.increment(command.sql.len() as u64).unwrap();
     }
-
-    let elapsed = now.elapsed();
-    println!("We handled {} commands in {:?}.", command_num, elapsed);
-    println!("On average, one command takes {:?}.", elapsed/command_num);
-    // println!("On average, one command takes {:.2} microsecs.", average_time);
+    println!("Number of commands: {}", num_commands);
+    println!("Encoding (ns): Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
+             encode_histo.mean().unwrap(),
+             encode_histo.percentile(50f64).unwrap(),
+             encode_histo.percentile(95f64).unwrap(),
+             encode_histo.minimum().unwrap(),
+             encode_histo.maximum().unwrap(),
+             encode_histo.stddev().unwrap(),
+    );
+    println!("Decoding (ns): Avg: {}, p50: {}, p95: {},Min: {}, Max: {}, StdDev: {}",
+             decode_histo.mean().unwrap(),
+             decode_histo.percentile(50f64).unwrap(),
+             decode_histo.percentile(95f64).unwrap(),
+             decode_histo.minimum().unwrap(),
+             decode_histo.maximum().unwrap(),
+             decode_histo.stddev().unwrap(),
+    );
+    println!("Query length: Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
+             query_len_histo.mean().unwrap(),
+             query_len_histo.percentile(50f64).unwrap(),
+             query_len_histo.percentile(95f64).unwrap(),
+             query_len_histo.minimum().unwrap(),
+             query_len_histo.maximum().unwrap(),
+             query_len_histo.stddev().unwrap(),
+    );
 }
