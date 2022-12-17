@@ -40,6 +40,18 @@ impl CacheModel {
         self.index_cache.insert(key, PhantomData);
     }
 
+    /// update the frequency or recency of the template.
+    pub fn update_cache(&mut self, key: &CacheKey) {
+        if self.use_lfu {
+            let _ = self
+                .lfu_cache
+                .get(key)
+                .expect("Tried to update frequency of cache item that doesn't exist.");
+        } else {
+            self.lru_cache.promote(key);
+        }
+    }
+
     /// get index from cache
     pub fn get_index_of(&mut self, key: &CacheKey) -> Option<usize> {
         self.index_cache.get_index_of(key)

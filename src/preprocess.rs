@@ -17,21 +17,20 @@ lazy_static! {
 pub fn encode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
     // split sql into template and parameters
     let (template, parameters) = preprocess::split_query(&command.sql);
-    let cache_key: cache::CacheKey = template.clone();
 
-    if let Some(index) = cache.get_index_of(&cache_key) {
+    if let Some(index) = cache.get_index_of(&template) {
         // exists in cache
         // send index and parameters
         let compressed = format!("1*|*{}*|*{}", index, parameters);
         command.sql = compressed;
+        cache.update_cache(&template);
     } else {
         // send template and parameters
-        let uncompressed = format!("0*|*{}*|*{}", template, parameters);
+        let uncompressed = format!("0*|*{}*|*{}", template.clone(), parameters);
         command.sql = uncompressed;
+        // update cache for leader
+        cache.put(template);
     }
-
-    // update cache for leader
-    cache.put(cache_key);
 }
 
 pub fn decode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
