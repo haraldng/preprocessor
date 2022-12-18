@@ -39,28 +39,31 @@ pub fn decode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
         panic!("Unexpected query: {:?}", command.sql);
     }
 
-    let (compressed, index_or_template, parameters) =
-        (parts[0], parts[1].to_string(), parts[2].to_string());
-    let mut template = index_or_template.clone();
+    let (compressed, index_or_template, parameters) = (parts[0], parts[1], parts[2]);
 
-    if compressed == "1" {
+    let template = if compressed == "1" {
         // compressed messsage
         let index = index_or_template.parse::<usize>().unwrap();
-        if let Some((key, _value)) = cache.get_with_index(index) {
-            template = key.clone();
-        } else {
-            let index = index;
-            let sql = command.sql.clone();
-            let size = cache.len();
-
-            panic!("Query:{} is out of index: {}/{:?}", sql, index, size);
-        }
-    }
-
-    // update cache for followers
-    let cache_key: cache::CacheKey = template.clone();
-    cache.put(cache_key);
-    command.sql = preprocess::merge_query(template, parameters);
+        let template = cache
+            .get_with_index(index)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Could not template from index: {}, query: {:?}, cache size: {}",
+                    index,
+                    command.sql,
+                    cache.len()
+                )
+            })
+            .0
+            .clone();
+        cache.update_cache(&template);
+        template
+    } else {
+        let template: cache::CacheKey = index_or_template.to_string();
+        cache.put(template.clone());
+        template
+    };
+    command.sql = preprocess::merge_query(&template, parameters);
 }
 
 // Split a raw sql query into a template and parameters
@@ -103,24 +106,24 @@ pub fn split_query(query: &str) -> (String, String) {
 
 // Merge template string with parameters
 // There should be the exact number of parameters to fill in
-pub fn merge_query(template: String, parameters: String) -> String {
+pub fn merge_query(template: &str, parameters: &str) -> String {
     if parameters.is_empty() {
-        return template;
+        return template.to_string();
     }
 
     let parameter_list = parameters.split(',').collect::<Vec<_>>();
     let num_parameters = parameter_list.len();
 
     let parts = template.split('@').collect::<Vec<_>>();
-    if parts.len() != num_parameters + 1 {
-        println!(
-            "Unmatched templates {} \n and parameters {}",
-            template, parameters
-        );
-        return template;
-    }
+    assert_eq!(
+        parts.len(),
+        num_parameters + 1,
+        "Unmatched templates {} \n and parameters {}",
+        template,
+        parameters
+    );
 
-    let mut query = String::new();
+    let mut query = String::with_capacity(template.len() + parameters.len());
     for i in 0..num_parameters {
         query.push_str(parts[i]);
         query.push_str(parameter_list[i]);

@@ -44,7 +44,7 @@ fn main() {
         encode_histo.stddev().unwrap(),
     );
     println!(
-        "Decoding (ns): Avg: {}, p50: {}, p95: {},Min: {}, Max: {}, StdDev: {}",
+        "Decoding (ns): Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
         decode_histo.mean().unwrap(),
         decode_histo.percentile(50f64).unwrap(),
         decode_histo.percentile(95f64).unwrap(),

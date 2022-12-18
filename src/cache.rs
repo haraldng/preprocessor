@@ -53,12 +53,12 @@ impl CacheModel {
     }
 
     /// get index from cache
-    pub fn get_index_of(&mut self, key: &CacheKey) -> Option<usize> {
+    pub fn get_index_of(&self, key: &CacheKey) -> Option<usize> {
         self.index_cache.get_index_of(key)
     }
 
     /// get value from cache
-    pub fn get_with_index(&mut self, index: usize) -> Option<(&CacheKey, &PhantomData<u32>)> {
+    pub fn get_with_index(&self, index: usize) -> Option<(&CacheKey, &PhantomData<u32>)> {
         self.index_cache.get_index(index)
     }
 
