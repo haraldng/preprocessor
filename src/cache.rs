@@ -1,22 +1,20 @@
-use lru::LruCache;
-use std::num::NonZeroUsize;
-use lfu_cache::LfuCache;
 use indexmap::IndexMap;
+use lfu_cache::LfuCache;
+use lru::LruCache;
+use std::marker::PhantomData;
+use std::num::NonZeroUsize;
 
 pub type CacheKey = String;
-pub type CacheValue = String;
 
 /// The cache we use in paxos
-pub struct CacheModel
-{
+pub struct CacheModel {
     use_lfu: bool,
-    lfu_cache: LfuCache<CacheKey, CacheValue>,
-    lru_cache: LruCache<CacheKey, CacheValue>,
-    index_cache: IndexMap<CacheKey, CacheValue>,
+    lfu_cache: LfuCache<CacheKey, PhantomData<u32>>,
+    lru_cache: LruCache<CacheKey, PhantomData<u32>>,
+    index_cache: IndexMap<CacheKey, PhantomData<u32>>,
 }
 
-impl CacheModel
-{
+impl CacheModel {
     /// create a new cache model
     pub fn with(capacity: usize, use_lfu: bool) -> Self {
         let lfu_cache_capacity = if use_lfu { capacity } else { 1 };
@@ -32,31 +30,35 @@ impl CacheModel
 
     /// save (key, value) pair into cache
     /// Optimization: The value could be skipped if it always equals to the key
-    pub fn put(&mut self, key: CacheKey, value: CacheValue) {
+    pub fn put(&mut self, key: CacheKey) {
         if self.use_lfu {
-            self.lfu_cache.insert(key.clone(), value.clone());
+            self.lfu_cache.insert(key.clone(), PhantomData);
         } else {
-            self.lru_cache.put(key.clone(), value.clone());
+            self.lru_cache.put(key.clone(), PhantomData);
         }
 
-        self.index_cache.insert(key, value);
+        self.index_cache.insert(key, PhantomData);
+    }
+
+    /// update the frequency or recency of the template.
+    pub fn update_cache(&mut self, key: &CacheKey) {
+        if self.use_lfu {
+            let _ = self
+                .lfu_cache
+                .get(key)
+                .expect("Tried to update frequency of cache item that doesn't exist.");
+        } else {
+            self.lru_cache.promote(key);
+        }
     }
 
     /// get index from cache
-    pub fn get_index_of(&mut self, key: CacheKey) -> Option<usize> {
-        if self.use_lfu {
-            if let Some(_value) = self.lfu_cache.get(&key) {
-                return self.index_cache.get_index_of(&key)
-            }
-        } else if let Some(_value) = self.lru_cache.get(&key) {
-            return self.index_cache.get_index_of(&key)
-        }
-
-        None
+    pub fn get_index_of(&self, key: &CacheKey) -> Option<usize> {
+        self.index_cache.get_index_of(key)
     }
 
     /// get value from cache
-    pub fn get_with_index(&mut self, index: usize) -> Option<(&CacheKey, &CacheValue)> {
+    pub fn get_with_index(&self, index: usize) -> Option<(&CacheKey, &PhantomData<u32>)> {
         self.index_cache.get_index(index)
     }
 
