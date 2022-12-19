@@ -12,6 +12,9 @@ indexmap = {version = "1.9.2", features = ["serde-1"] }
 lru = { version = "0.8.1" }
 lfu_cache = { version = "1.2.2" }
 histogram = "*"
+lecar = { git = "https://github.com/Wkkkkk/lecar" }
+strum = "0.24.1"
+strum_macros = "0.24.3"
 
 [profile.release]
 lto = true
