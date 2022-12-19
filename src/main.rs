@@ -15,12 +15,14 @@ fn main() {
     let mut encode_histo = Histogram::new();
     let mut decode_histo = Histogram::new();
     let mut query_len_histo = Histogram::new();
+    let mut compression_histo = Histogram::new();
+    let mut hit_count = 0;
 
     // run with checks
     for command in &commands[0..] {
         let mut raw_command = command.clone();
         let start = Instant::now();
-        encode(&mut raw_command, &mut cache);
+        let (hit, compression_rate) = encode(&mut raw_command, &mut cache);
         let encode_end = Instant::now();
         decode(&mut raw_command, &mut cache);
         let decode_end = Instant::now();
@@ -32,7 +34,11 @@ fn main() {
         encode_histo.increment(encode_time as u64).unwrap();
         decode_histo.increment(decode_time as u64).unwrap();
         query_len_histo.increment(command.sql.len() as u64).unwrap();
+        compression_histo.increment(compression_rate as u64).unwrap();
+        if hit { hit_count += 1; }
     }
+    let hit_rate = hit_count as f32 / num_commands as f32;
+
     println!("Number of commands: {}", num_commands);
     println!(
         "Encoding (ns): Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
@@ -61,4 +67,15 @@ fn main() {
         query_len_histo.maximum().unwrap(),
         query_len_histo.stddev().unwrap(),
     );
+    println!(
+        "Compression Rate (%): Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
+        compression_histo.mean().unwrap(),
+        compression_histo.percentile(50f64).unwrap(),
+        compression_histo.percentile(95f64).unwrap(),
+        compression_histo.minimum().unwrap(),
+        compression_histo.maximum().unwrap(),
+        compression_histo.stddev().unwrap(),
+    );
+
+    println!("Hit rate: {}", hit_rate);
 }

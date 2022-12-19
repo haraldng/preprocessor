@@ -14,22 +14,29 @@ lazy_static! {
         [Regex::new(RULES[0]).unwrap(), Regex::new(RULES[1]).unwrap(),];
 }
 
-pub fn encode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
+pub fn encode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) -> (bool, usize) {
     // split sql into template and parameters
     let (template, parameters) = preprocess::split_query(&command.sql);
-
+    let raw_length = command.sql.len();
+    
     if let Some(index) = cache.get_index_of(&template) {
         // exists in cache
         // send index and parameters
         let compressed = format!("1*|*{}*|*{}", index, parameters);
+        let compressed_length = compressed.len();
         command.sql = compressed;
         cache.update_cache(&template);
+
+        (true, 100 * compressed_length / raw_length)
     } else {
         // send template and parameters
         let uncompressed = format!("0*|*{}*|*{}", template.clone(), parameters);
+        let uncompressed_length = uncompressed.len();
         command.sql = uncompressed;
         // update cache for leader
         cache.put(template);
+    
+        (false, 100 * uncompressed_length / raw_length)
     }
 }
 
