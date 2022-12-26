@@ -8,7 +8,7 @@ use strum_macros::EnumIter;
 
 pub type CacheKey = String;
 
-#[derive(Debug, Eq, PartialEq, EnumIter)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, EnumIter)]
 pub enum CacheType {
     LFU,
     LRU,

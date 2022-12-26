@@ -16,6 +16,7 @@ fn main() {
         println!("Measuring cache type: {:?}", cache_type);
 
         let mut cache = cache::CacheModel::with(500, cache_type);
+        let mut decode_cache = cache::CacheModel::with(500, cache_type);
         let mut encode_histo = Histogram::new();
         let mut decode_histo = Histogram::new();
         let mut query_len_histo = Histogram::new();
@@ -28,7 +29,7 @@ fn main() {
             let start = Instant::now();
             let (hit, compression_rate) = encode(&mut raw_command, &mut cache);
             let encode_end = Instant::now();
-            decode(&mut raw_command, &mut cache);
+            decode(&mut raw_command, &mut decode_cache);
             let decode_end = Instant::now();
 
             assert_eq!(raw_command.sql, command.sql);
