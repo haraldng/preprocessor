@@ -22,26 +22,29 @@ pub fn encode<U: UniCache<CacheKey>>(
 ) -> (bool, usize) {
     // split sql into template and parameters
     let (template, parameters) = preprocess::split_query(&command.sql);
-    let raw_length = command.sql.len();
+    let raw_length = command.sql.len() as f32;
 
     if let Some(index) = cache.get_encoded_index(&template) {
         // exists in cache
         // send index and parameters
         let compressed = format!("1*|*{}*|*{}", index, parameters);
-        let compressed_length = compressed.len();
+        let compressed_length = compressed.len() as f32;
         command.sql = compressed;
         // cache.update_cache(&template);
 
-        (true, 100 * compressed_length / raw_length)
+        (
+            true,
+            (100f32 * (1f32 - compressed_length / raw_length)) as usize,
+        )
     } else {
         // send template and parameters
         let uncompressed = format!("0*|*{}*|*{}", template.clone(), parameters);
-        let uncompressed_length = uncompressed.len();
+        // let uncompressed_length = uncompressed.len();
         command.sql = uncompressed;
         // update cache for leader
         cache.put(template);
 
-        (false, 100 * uncompressed_length / raw_length)
+        (false, 0)
     }
 }
 
@@ -56,9 +59,7 @@ pub fn decode<U: UniCache<CacheKey>>(command: &mut load::StoreCommand, cache: &m
     let template = if compressed == "1" {
         // compressed messsage
         let index = index_or_template.parse::<usize>().unwrap();
-        let template = cache.get_with_encoded_index(index);
-        // cache.update_cache(&template);
-        template
+        cache.get_with_encoded_index(index)
     } else {
         let template: CacheKey = index_or_template.to_string();
         cache.put(template.clone());

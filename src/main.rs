@@ -21,8 +21,10 @@ use strum::IntoEnumIterator;
 
 type CacheKey = String;
 const CACHE_CAPACITY: usize = 500;
+const NUM_QUERIES: i64 = -1; // -1 to run the whole benchmark
 
 fn main() {
+    let total_start = Instant::now();
     let mut query_len_histo = Histogram::new();
 
     let mut lfu_cache = LfuUniCache::new(CACHE_CAPACITY);
@@ -35,7 +37,10 @@ fn main() {
 
     let file = File::open("raw_queries.txt").unwrap();
     let reader = BufReader::new(file);
-    for line in reader.lines() {
+    for (idx, line) in reader.lines().enumerate() {
+        if idx as i64 == NUM_QUERIES {
+            break;
+        }
         let command = StoreCommand {
             id: 0,
             sql: line.unwrap(),
@@ -72,9 +77,12 @@ fn main() {
         }
         query_len_histo.increment(command.sql.len() as u64).unwrap();
     }
+    let total_end = Instant::now();
     /*** Print Results ***/
+    println!("Total time: {:?}", total_end.duration_since(total_start));
     println!(
-        "Query length: Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
+        "Number of Queries: {}. Query length: Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
+        query_len_histo.entries(),
         query_len_histo.mean().unwrap(),
         query_len_histo.percentile(50f64).unwrap(),
         query_len_histo.percentile(95f64).unwrap(),

@@ -34,13 +34,12 @@ impl<T: Clone + Debug + Hash + Eq> UniCache<T> for LfuUniCache<T> {
 
     fn get_with_encoded_index(&mut self, index: usize) -> T {
         let item = self.index_cache.get_index(index).unwrap().0.clone();
-        self.lfu_cache.get(&item).expect(
-            format!(
+        self.lfu_cache.get(&item).unwrap_or_else(|| {
+            panic!(
                 "Tried to update frequency of cache item that doesn't exist: {:?}",
                 &item
             )
-            .as_str(),
-        );
+        });
         item
     }
 }
