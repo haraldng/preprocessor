@@ -1,96 +1,92 @@
 mod cache;
+mod lecar_cache;
+mod lfu_cache;
 mod load;
+mod lru_cache;
 mod preprocess;
+mod util;
 
+use crate::cache::{CacheType, UniCache};
+use crate::lecar_cache::LecarUniCache;
+use crate::lfu_cache::LfuUniCache;
 use crate::load::StoreCommand;
+use crate::lru_cache::LruUniCache;
 use crate::preprocess::{decode, encode};
+use crate::util::Results;
 use histogram::Histogram;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::time::Instant;
 use strum::IntoEnumIterator;
 
+type CacheKey = String;
+const CACHE_CAPACITY: usize = 500;
+
 fn main() {
-    for cache_type in cache::CacheType::iter() {
-        println!("--------------------------------");
-        println!("Measuring cache type: {:?}", cache_type);
+    let mut query_len_histo = Histogram::new();
 
-        let mut cache = cache::CacheModel::with(500, cache_type);
-        let mut encode_histo = Histogram::new();
-        let mut decode_histo = Histogram::new();
-        let mut query_len_histo = Histogram::new();
-        let mut compression_histo = Histogram::new();
-        let mut hit_count = 0;
-        let file = File::open("raw_queries.txt").unwrap();
-        let reader = BufReader::new(file);
-        let mut num_commands = 0;
-        for line in reader.lines() {
-            let command = StoreCommand {
-                id: 0,
-                sql: line.unwrap(),
-            };
-            num_commands = num_commands + 1;
+    let mut lfu_cache = LfuUniCache::new(CACHE_CAPACITY);
+    let mut lru_cache = LruUniCache::new(CACHE_CAPACITY);
+    let mut lecar_cache = LecarUniCache::new(CACHE_CAPACITY);
+
+    let mut lfu_res = Results::new(CacheType::LFU);
+    let mut lru_res = Results::new(CacheType::LRU);
+    let mut lecar_res = Results::new(CacheType::LECAR);
+
+    let file = File::open("raw_queries.txt").unwrap();
+    let reader = BufReader::new(file);
+    for line in reader.lines() {
+        let command = StoreCommand {
+            id: 0,
+            sql: line.unwrap(),
+        };
+        for cache_type in CacheType::iter() {
             let mut raw_command = command.clone();
-            let start = Instant::now();
-            let (hit, compression_rate) = encode(&mut raw_command, &mut cache);
-            let encode_end = Instant::now();
-            decode(&mut raw_command, &mut cache);
-            let decode_end = Instant::now();
-
-            assert_eq!(raw_command.sql, command.sql);
-
-            let encode_time = encode_end.duration_since(start).as_nanos();
-            let decode_time = decode_end.duration_since(encode_end).as_nanos();
-            encode_histo.increment(encode_time as u64).unwrap();
-            decode_histo.increment(decode_time as u64).unwrap();
-            query_len_histo.increment(command.sql.len() as u64).unwrap();
-            compression_histo
-                .increment(compression_rate as u64)
-                .unwrap();
-            if hit {
-                hit_count += 1;
+            match cache_type {
+                CacheType::LFU => {
+                    let start = Instant::now();
+                    let (hit, compression_rate) = encode(&mut raw_command, &mut lfu_cache);
+                    let encode_end = Instant::now();
+                    decode(&mut raw_command, &mut lfu_cache);
+                    let end = Instant::now();
+                    lfu_res.update(start, encode_end, end, hit, compression_rate);
+                }
+                CacheType::LRU => {
+                    let start = Instant::now();
+                    let (hit, compression_rate) = encode(&mut raw_command, &mut lru_cache);
+                    let encode_end = Instant::now();
+                    decode(&mut raw_command, &mut lru_cache);
+                    let end = Instant::now();
+                    lru_res.update(start, encode_end, end, hit, compression_rate);
+                }
+                CacheType::LECAR => {
+                    let start = Instant::now();
+                    let (hit, compression_rate) = encode(&mut raw_command, &mut lecar_cache);
+                    let encode_end = Instant::now();
+                    decode(&mut raw_command, &mut lecar_cache);
+                    let end = Instant::now();
+                    lecar_res.update(start, encode_end, end, hit, compression_rate);
+                }
             }
+            assert_eq!(raw_command.sql, command.sql);
         }
-        let hit_rate = hit_count as f32 / num_commands as f32;
-
-        println!("Number of commands: {}", num_commands);
-        println!(
-            "Encoding (ns): Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
-            encode_histo.mean().unwrap(),
-            encode_histo.percentile(50f64).unwrap(),
-            encode_histo.percentile(95f64).unwrap(),
-            encode_histo.minimum().unwrap(),
-            encode_histo.maximum().unwrap(),
-            encode_histo.stddev().unwrap(),
-        );
-        println!(
-            "Decoding (ns): Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
-            decode_histo.mean().unwrap(),
-            decode_histo.percentile(50f64).unwrap(),
-            decode_histo.percentile(95f64).unwrap(),
-            decode_histo.minimum().unwrap(),
-            decode_histo.maximum().unwrap(),
-            decode_histo.stddev().unwrap(),
-        );
-        println!(
-            "Query length: Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
-            query_len_histo.mean().unwrap(),
-            query_len_histo.percentile(50f64).unwrap(),
-            query_len_histo.percentile(95f64).unwrap(),
-            query_len_histo.minimum().unwrap(),
-            query_len_histo.maximum().unwrap(),
-            query_len_histo.stddev().unwrap(),
-        );
-        println!(
-            "Compression Rate (%): Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
-            compression_histo.mean().unwrap(),
-            compression_histo.percentile(50f64).unwrap(),
-            compression_histo.percentile(95f64).unwrap(),
-            compression_histo.minimum().unwrap(),
-            compression_histo.maximum().unwrap(),
-            compression_histo.stddev().unwrap(),
-        );
-
-        println!("Hit rate: {}", hit_rate);
+        query_len_histo.increment(command.sql.len() as u64).unwrap();
+    }
+    /*** Print Results ***/
+    println!(
+        "Query length: Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
+        query_len_histo.mean().unwrap(),
+        query_len_histo.percentile(50f64).unwrap(),
+        query_len_histo.percentile(95f64).unwrap(),
+        query_len_histo.minimum().unwrap(),
+        query_len_histo.maximum().unwrap(),
+        query_len_histo.stddev().unwrap(),
+    );
+    for cache_type in CacheType::iter() {
+        match cache_type {
+            CacheType::LFU => println!("{}", lfu_res),
+            CacheType::LRU => println!("{}", lru_res),
+            CacheType::LECAR => println!("{}", lecar_res),
+        }
     }
 }

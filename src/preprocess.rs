@@ -1,4 +1,4 @@
-use crate::{cache, load, preprocess};
+use crate::{load, preprocess, CacheKey, UniCache};
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -16,12 +16,15 @@ lazy_static! {
         [Regex::new(RULES[0]).unwrap(), Regex::new(RULES[1]).unwrap(),];
 }
 
-pub fn encode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) -> (bool, usize) {
+pub fn encode<U: UniCache<CacheKey>>(
+    command: &mut load::StoreCommand,
+    cache: &mut U,
+) -> (bool, usize) {
     // split sql into template and parameters
     let (template, parameters) = preprocess::split_query(&command.sql);
     let raw_length = command.sql.len();
 
-    if let Some(index) = cache.get_index_of(&template) {
+    if let Some(index) = cache.get_encoded_index(&template) {
         // exists in cache
         // send index and parameters
         let compressed = format!("1*|*{}*|*{}", index, parameters);
@@ -42,7 +45,7 @@ pub fn encode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) -
     }
 }
 
-pub fn decode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
+pub fn decode<U: UniCache<CacheKey>>(command: &mut load::StoreCommand, cache: &mut U) {
     let parts: Vec<&str> = command.sql.split("*|*").collect();
     if parts.len() != 3 {
         panic!("Unexpected query: {:?}", command.sql);
@@ -53,22 +56,11 @@ pub fn decode(command: &mut load::StoreCommand, cache: &mut cache::CacheModel) {
     let template = if compressed == "1" {
         // compressed messsage
         let index = index_or_template.parse::<usize>().unwrap();
-        let template = cache
-            .get_with_index(index)
-            .unwrap_or_else(|| {
-                panic!(
-                    "Could not template from index: {}, query: {:?}, cache size: {}",
-                    index,
-                    command.sql,
-                    cache.len()
-                )
-            })
-            .0
-            .clone();
-        cache.update_cache(&template);
+        let template = cache.get_with_encoded_index(index);
+        // cache.update_cache(&template);
         template
     } else {
-        let template: cache::CacheKey = index_or_template.to_string();
+        let template: CacheKey = index_or_template.to_string();
         cache.put(template.clone());
         template
     };
