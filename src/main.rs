@@ -2,15 +2,15 @@ mod cache;
 mod load;
 mod preprocess;
 
+use crate::load::StoreCommand;
 use crate::preprocess::{decode, encode};
 use histogram::Histogram;
+use std::fs::File;
+use std::io::{prelude::*, BufReader};
 use std::time::Instant;
 use strum::IntoEnumIterator;
 
 fn main() {
-    let commands = load::read_from_file("queries.txt");
-    let num_commands = commands.len();
-    println!("Total number of commands: {}", num_commands);
     for cache_type in cache::CacheType::iter() {
         println!("--------------------------------");
         println!("Measuring cache type: {:?}", cache_type);
@@ -21,9 +21,15 @@ fn main() {
         let mut query_len_histo = Histogram::new();
         let mut compression_histo = Histogram::new();
         let mut hit_count = 0;
-
-        // run with checks
-        for command in &commands[0..] {
+        let file = File::open("raw_queries.txt").unwrap();
+        let reader = BufReader::new(file);
+        let mut num_commands = 0;
+        for line in reader.lines() {
+            let command = StoreCommand {
+                id: 0,
+                sql: line.unwrap(),
+            };
+            num_commands = num_commands + 1;
             let mut raw_command = command.clone();
             let start = Instant::now();
             let (hit, compression_rate) = encode(&mut raw_command, &mut cache);
@@ -38,8 +44,12 @@ fn main() {
             encode_histo.increment(encode_time as u64).unwrap();
             decode_histo.increment(decode_time as u64).unwrap();
             query_len_histo.increment(command.sql.len() as u64).unwrap();
-            compression_histo.increment(compression_rate as u64).unwrap();
-            if hit { hit_count += 1; }
+            compression_histo
+                .increment(compression_rate as u64)
+                .unwrap();
+            if hit {
+                hit_count += 1;
+            }
         }
         let hit_rate = hit_count as f32 / num_commands as f32;
 
@@ -82,6 +92,5 @@ fn main() {
         );
 
         println!("Hit rate: {}", hit_rate);
-        
     }
 }

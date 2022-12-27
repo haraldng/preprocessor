@@ -1,10 +1,10 @@
 use indexmap::IndexMap;
+use lecar::controller::Controller;
 use lfu_cache::LfuCache;
 use lru::LruCache;
 use std::marker::PhantomData;
 use std::num::NonZeroUsize;
-use lecar::controller::Controller;
-use strum_macros::EnumIter; 
+use strum_macros::EnumIter;
 
 pub type CacheKey = String;
 
@@ -12,7 +12,7 @@ pub type CacheKey = String;
 pub enum CacheType {
     LFU,
     LRU,
-    LECAR
+    LECAR,
 }
 
 /// The cache we use in paxos
@@ -40,9 +40,15 @@ impl CacheModel {
     /// Optimization: The value could be skipped if it always equals to the key
     pub fn put(&mut self, key: CacheKey) {
         match self.cache_type {
-            CacheType::LFU => { self.lfu_cache.insert(key.clone(), PhantomData); },
-            CacheType::LRU => { self.lru_cache.put(key.clone(), PhantomData); },
-            CacheType::LECAR => { self.lecar_cache.insert(&key, 0); },
+            CacheType::LFU => {
+                self.lfu_cache.insert(key.clone(), PhantomData);
+            }
+            CacheType::LRU => {
+                self.lru_cache.put(key.clone(), PhantomData);
+            }
+            CacheType::LECAR => {
+                self.lecar_cache.insert(&key, 0);
+            }
         }
 
         self.index_cache.insert(key, PhantomData);
@@ -51,15 +57,42 @@ impl CacheModel {
     /// update the frequency or recency of the template.
     pub fn update_cache(&mut self, key: &CacheKey) {
         match self.cache_type {
-            CacheType::LFU => { self.lfu_cache.get(key).expect("Tried to update frequency of cache item that doesn't exist."); },
-            CacheType::LRU => { self.lru_cache.promote(key); },
-            CacheType::LECAR => { self.lecar_cache.get(key).expect("Tried to update frequency of cache item that doesn't exist.");  },
+            CacheType::LFU => {
+                self.lfu_cache.get(key).expect(
+                    format!(
+                        "Tried to update frequency of cache item that doesn't exist: {:?}",
+                        key
+                    )
+                    .as_str(),
+                );
+            }
+            CacheType::LRU => {
+                self.lru_cache.promote(key);
+            }
+            CacheType::LECAR => {
+                self.lecar_cache.get(key).expect(
+                    format!(
+                        "Tried to update frequency of cache item that doesn't exist: {:?}",
+                        key
+                    )
+                    .as_str(),
+                );
+            }
         }
     }
 
     /// get index from cache
-    pub fn get_index_of(&self, key: &CacheKey) -> Option<usize> {
-        self.index_cache.get_index_of(key)
+    pub fn get_index_of(&mut self, key: &CacheKey) -> Option<usize> {
+        let exists = match self.cache_type {
+            CacheType::LFU => self.lfu_cache.get(key).is_some(),
+            CacheType::LRU => self.lru_cache.get(key).is_some(),
+            CacheType::LECAR => self.lecar_cache.get(key).is_some(),
+        };
+        if exists {
+            self.index_cache.get_index_of(key)
+        } else {
+            None
+        }
     }
 
     /// get value from cache
