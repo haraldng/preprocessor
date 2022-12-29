@@ -22,6 +22,7 @@ use strum::IntoEnumIterator;
 type CacheKey = String;
 const CACHE_CAPACITY: usize = 500;
 const NUM_QUERIES: i64 = -1; // -1 to run the whole benchmark
+const FILE: &str = "queries-sample.txt";   // change this to run sample or full dataset.
 
 fn main() {
     let total_start = Instant::now();
@@ -35,7 +36,7 @@ fn main() {
     let mut lru_res = Results::new(CacheType::LRU);
     let mut lecar_res = Results::new(CacheType::LECAR);
 
-    let file = File::open("raw_queries.txt").unwrap();
+    let file = File::open(FILE).unwrap();
     let reader = BufReader::new(file);
     for (idx, line) in reader.lines().enumerate() {
         if idx as i64 == NUM_QUERIES {
