@@ -2,3 +2,5 @@
 /.idea
 .DS_Store
 *.iml
+*.zip
+raw_queries.txt

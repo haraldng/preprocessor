@@ -1,16 +1,18 @@
+/*
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+*/
 
 #[derive(Debug, Clone)]
 pub struct StoreCommand {
-    pub _id: usize,
+    pub id: usize,
     pub sql: String,
 }
-
+/*
 impl StoreCommand {
     pub fn new(id: usize, sql: String) -> StoreCommand {
-        StoreCommand { _id: id, sql }
+        StoreCommand { id: id, sql }
     }
 }
 
@@ -35,3 +37,4 @@ where
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }
+*/
