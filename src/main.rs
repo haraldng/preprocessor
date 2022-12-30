@@ -29,8 +29,13 @@ fn main() {
     let mut query_len_histo = Histogram::new();
 
     let mut lfu_cache = LfuUniCache::new(CACHE_CAPACITY);
+    let mut lfu_decoder = LfuUniCache::new(CACHE_CAPACITY);
+
     let mut lru_cache = LruUniCache::new(CACHE_CAPACITY);
+    let mut lru_decoder = LruUniCache::new(CACHE_CAPACITY);
+
     let mut lecar_cache = LecarUniCache::new(CACHE_CAPACITY);
+    let mut lecar_decoder = LecarUniCache::new(CACHE_CAPACITY);
 
     let mut lfu_res = Results::new(CacheType::LFU);
     let mut lru_res = Results::new(CacheType::LRU);
@@ -53,7 +58,7 @@ fn main() {
                     let start = Instant::now();
                     let (hit, compression_rate) = encode(&mut raw_command, &mut lfu_cache);
                     let encode_end = Instant::now();
-                    decode(&mut raw_command, &mut lfu_cache);
+                    decode(&mut raw_command, &mut lfu_decoder);
                     let end = Instant::now();
                     lfu_res.update(start, encode_end, end, hit, compression_rate);
                 }
@@ -61,7 +66,7 @@ fn main() {
                     let start = Instant::now();
                     let (hit, compression_rate) = encode(&mut raw_command, &mut lru_cache);
                     let encode_end = Instant::now();
-                    decode(&mut raw_command, &mut lru_cache);
+                    decode(&mut raw_command, &mut lru_decoder);
                     let end = Instant::now();
                     lru_res.update(start, encode_end, end, hit, compression_rate);
                 }
@@ -69,7 +74,7 @@ fn main() {
                     let start = Instant::now();
                     let (hit, compression_rate) = encode(&mut raw_command, &mut lecar_cache);
                     let encode_end = Instant::now();
-                    decode(&mut raw_command, &mut lecar_cache);
+                    decode(&mut raw_command, &mut lecar_decoder);
                     let end = Instant::now();
                     lecar_res.update(start, encode_end, end, hit, compression_rate);
                 }
