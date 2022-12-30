@@ -3,7 +3,7 @@ pub(crate) mod preprocess;
 use serde::Deserialize;
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
-pub struct MediumRecord {
+pub struct RawMediumRecord {
     post_time: String,
     post_name: String,
     post_author: String,
@@ -14,16 +14,35 @@ pub struct MediumRecord {
     post_tag_4: String,
 }
 
+
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
+pub struct MediumRecord {
+    post_time: String,
+    post_name: String,
+    post_author: String,
+    post_publication: String,
+    post_tags: [String; 4]
+}
+
+impl From<RawMediumRecord> for MediumRecord {
+    fn from(r: RawMediumRecord) -> Self {
+        Self {
+            post_time: r.post_time,
+            post_name: r.post_name,
+            post_author: r.post_author,
+            post_publication: r.post_publication,
+            post_tags: [r.post_tag_1, r.post_tag_2, r.post_tag_3, r.post_tag_4]
+        }
+    }
+}
+
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub struct EncodedMediumRecord {
     post_time: String,
     post_name: Vec<MaybeEncoded>,
     post_author: Vec<MaybeEncoded>,
     post_publication: MaybeEncoded,
-    post_tag_1: MaybeEncoded,
-    post_tag_2: MaybeEncoded,
-    post_tag_3: MaybeEncoded,
-    post_tag_4: MaybeEncoded,
+    post_tags: [MaybeEncoded; 4]
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
@@ -38,22 +57,22 @@ impl Record {
         let mut size = 0;
         match self {
             Record::Encoded(e) => {
+                /*
+                size += e.post_time.len();
+                size += 5;
+                size += e.post_name.len();
+                size += e.post_author.len();
+                */
                 size += e.post_time.len();
                 size += e.post_publication.get_size();
-                size += e.post_tag_1.get_size();
-                size += e.post_tag_2.get_size();
-                size += e.post_tag_3.get_size();
-                size += e.post_tag_4.get_size();
+                e.post_tags.iter().for_each(|x| size += x.get_size());
                 e.post_name.iter().for_each(|x| size += x.get_size());
                 e.post_author.iter().for_each(|x|  size += x.get_size());
             },
             Record::Decoded(d) => {
                 size += d.post_time.len();
                 size += d.post_publication.len();
-                size += d.post_tag_1.len();
-                size += d.post_tag_2.len();
-                size += d.post_tag_3.len();
-                size += d.post_tag_4.len();
+                d.post_tags.iter().for_each(|x| size += x.len());
                 size += d.post_name.len();
                 size += d.post_author.len();
             },

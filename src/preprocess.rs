@@ -1,3 +1,4 @@
+/*
 use crate::{load, preprocess, CacheKey, UniCache};
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -134,3 +135,4 @@ pub fn merge_query(template: &str, parameters: &str) -> String {
 
     query
 }
+*/
