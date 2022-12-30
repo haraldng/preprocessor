@@ -1,11 +1,11 @@
-use crate::CacheType;
+use crate::CachePolicy;
 use histogram::Histogram;
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::Instant;
 
 pub(crate) struct Results {
-    cache_type: CacheType,
+    cache_type: CachePolicy,
     encode_histo: Histogram,
     decode_histo: Histogram,
     compression_histo: Histogram,
@@ -14,7 +14,7 @@ pub(crate) struct Results {
 }
 
 impl Results {
-    pub(crate) fn new(cache_type: CacheType) -> Self {
+    pub(crate) fn new(cache_type: CachePolicy) -> Self {
         Self {
             cache_type,
             encode_histo: Default::default(),
