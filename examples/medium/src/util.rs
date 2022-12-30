@@ -1,5 +1,3 @@
-pub(crate) mod preprocess;
-
 use serde::Deserialize;
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
@@ -17,11 +15,11 @@ pub struct RawMediumRecord {
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub struct MediumRecord {
-    post_time: String,
-    post_name: String,
-    post_author: String,
-    post_publication: String,
-    post_tags: [String; 4]
+    pub(crate) post_time: String,
+    pub(crate) post_name: String,
+    pub(crate) post_author: String,
+    pub(crate) post_publication: String,
+    pub(crate) post_tags: [String; 4]
 }
 
 impl From<RawMediumRecord> for MediumRecord {
@@ -38,11 +36,11 @@ impl From<RawMediumRecord> for MediumRecord {
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub struct EncodedMediumRecord {
-    post_time: String,
-    post_name: Vec<MaybeEncoded>,
-    post_author: Vec<MaybeEncoded>,
-    post_publication: MaybeEncoded,
-    post_tags: [MaybeEncoded; 4]
+    pub(crate) post_time: String,
+    pub(crate) post_name: Vec<MaybeEncoded>,
+    pub(crate) post_author: Vec<MaybeEncoded>,
+    pub(crate) post_publication: MaybeEncoded,
+    pub(crate) post_tags: [MaybeEncoded; 4]
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
@@ -96,31 +94,5 @@ impl MaybeEncoded {
             MaybeEncoded::Decoded(s) => s.len(),
         }
 
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs::File;
-    use super::*;
-    use crate::medium::MediumRecord;
-
-    #[test]
-    fn test_medium() {
-        /*
-        let file = File::open("datasets/medium/Train.csv").unwrap();
-        let mut reader = csv::Reader::from_reader(file);
-
-
-        for record in reader.deserialize() {
-            let record: MediumRecord = record.unwrap();
-            println!("{:?}\n", record);
-        }
-        */
-
-        let e = MaybeEncoded::Encoded(5);
-        let de = MaybeEncoded::Decoded("Welcome".to_string());
-        println!("e: {}, de: {}", e.get_size(), de.get_size());
-        assert!(de.get_size() > e.get_size())
     }
 }

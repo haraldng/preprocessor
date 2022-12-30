@@ -1,13 +1,3 @@
-use std::fmt::Debug;
-use strum_macros::EnumIter;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, EnumIter)]
-pub enum CachePolicy {
-    LFU,
-    LRU,
-    LECAR,
-}
-
 // pub trait CacheItem: Clone + Debug + Hash + Eq {}
 
 pub trait UniCache<T> {

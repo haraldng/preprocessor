@@ -1,37 +1,38 @@
-/*
-use crate::{load, preprocess, CacheKey, UniCache};
+use preprocessor::cache::unicache::UniCache;
 use lazy_static::lazy_static;
 use regex::Regex;
 
 const SEPARATOR: char = '#';
-
 const RULES: [&str; 2] = [
     r#"('\d+\\.*?')"#, // hash values
-    //r#"'((')|(.*?([^\\])'))"#,        // string
-    //r#""((")|(.*?([^\\])"))"#,        // double-quoted string
     r#"([^a-zA-Z'(,\*])\d+(\.\d+)?"#, // integers(prevent us from capturing table name like "a1")
 ];
-
 lazy_static! {
     static ref REGEX_SETS: [Regex; 2] =
         [Regex::new(RULES[0]).unwrap(), Regex::new(RULES[1]).unwrap(),];
 }
 
-pub fn encode<U: UniCache<CacheKey>>(
-    command: &mut load::StoreCommand,
+#[derive(Debug, Clone)]
+pub struct StoreCommand {
+    pub id: usize,
+    pub sql: String,
+}
+
+pub fn encode<U: UniCache<String>>(
+    command: &mut StoreCommand,
     cache: &mut U,
 ) -> (bool, usize) {
     // split sql into template and parameters
-    let (template, parameters) = preprocess::split_query(&command.sql);
+    let (template, parameters) = split_query(&command.sql);
     let raw_length = command.sql.len() as f32;
 
     if let Some(index) = cache.get_encoded_index(&template) {
-        // exists in cache
+        // exists in lib.cache
         // send index and parameters
         let compressed = format!("1*|*{}*|*{}", index, parameters);
         let compressed_length = compressed.len() as f32;
         command.sql = compressed;
-        // cache.update_cache(&template);
+        // lib.cache.update_cache(&template);
 
         (
             true,
@@ -42,14 +43,14 @@ pub fn encode<U: UniCache<CacheKey>>(
         let uncompressed = format!("0*|*{}*|*{}", template.clone(), parameters);
         // let uncompressed_length = uncompressed.len();
         command.sql = uncompressed;
-        // update cache for leader
+        // update lib.cache for leader
         cache.put(template);
 
         (false, 0)
     }
 }
 
-pub fn decode<U: UniCache<CacheKey>>(command: &mut load::StoreCommand, cache: &mut U) {
+pub fn decode<U: UniCache<String>>(command: &mut StoreCommand, cache: &mut U) {
     let parts: Vec<&str> = command.sql.split("*|*").collect();
     if parts.len() != 3 {
         panic!("Unexpected query: {:?}", command.sql);
@@ -62,11 +63,11 @@ pub fn decode<U: UniCache<CacheKey>>(command: &mut load::StoreCommand, cache: &m
         let index = index_or_template.parse::<usize>().unwrap();
         cache.get_with_encoded_index(index)
     } else {
-        let template: CacheKey = index_or_template.to_string();
+        let template: String = index_or_template.to_string();
         cache.put(template.clone());
         template
     };
-    command.sql = preprocess::merge_query(&template, parameters);
+    command.sql = merge_query(&template, parameters);
 }
 
 // Split a raw sql query into a template and parameters
@@ -135,4 +136,3 @@ pub fn merge_query(template: &str, parameters: &str) -> String {
 
     query
 }
-*/

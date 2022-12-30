@@ -1,32 +1,22 @@
-mod load;
-
-mod preprocess;
-mod util;
-mod cache;
-mod medium;
-
-
-use crate::cache::unicache::*;
-/*
-use crate::load::StoreCommand;
-use crate::preprocess::{decode, encode};
-use std::io::{prelude::*, BufReader};
- */
-use crate::util::Results;
+use preprocessor::cache::unicache::*;
+use preprocessor::util::*;
 use histogram::Histogram;
 use std::fs::File;
 use std::time::Instant;
 use strum::IntoEnumIterator;
-use crate::cache::lecar_cache::LecarUniCache;
-use crate::cache::lfu_cache::LfuUniCache;
-use crate::cache::lru_cache::LruUniCache;
-use crate::medium::{MediumRecord, RawMediumRecord, Record};
+use preprocessor::cache::lecar_cache::LecarUniCache;
+use preprocessor::cache::lfu_cache::LfuUniCache;
+use preprocessor::cache::lru_cache::LruUniCache;
 
-type CacheKey = String;
+mod util;
+mod preprocess;
+use preprocess::{encode, decode};
+use util::*;
+
 const CACHE_CAPACITY: usize = u8::MAX as usize;
 // const CACHE_CAPACITY: usize = 500000;
-const NUM_QUERIES: i64 = 100000; // -1 to run the whole benchmark
-const FILE: &str = "datasets/medium/Train.csv";   // change this to run sample or full dataset.
+const NUM_QUERIES: i64 = -1; // -1 to run the whole benchmark
+const FILE: &str = "../../datasets/medium/Train.csv";   // change this to run sample or full dataset.
 
 fn main() {
     let total_start = Instant::now();
@@ -41,25 +31,11 @@ fn main() {
     let mut lecar_caches = [false; 4].map(|_| LecarUniCache::new(CACHE_CAPACITY));
     let mut lecar_decoders = [false; 4].map(|_| LecarUniCache::new(CACHE_CAPACITY));
 
-
-    // let y: [&mut LfuUniCache<String>; 4] = {
-    //     todo!()
-    // };
-/*
-    let mut lfu_cache = LfuUniCache::new(CACHE_CAPACITY);
-    let mut lru_cache = LruUniCache::new(CACHE_CAPACITY);
-    let mut lecar_cache = LecarUniCache::new(CACHE_CAPACITY);
-
-    let mut lfu_decoder = LfuUniCache::new(CACHE_CAPACITY);
-    let mut lru_decoder = LruUniCache::new(CACHE_CAPACITY);
-    let mut lecar_decoder = LecarUniCache::new(CACHE_CAPACITY);
-    */
-
     let mut lfu_res = Results::new(CachePolicy::LFU);
     let mut lru_res = Results::new(CachePolicy::LRU);
     let mut lecar_res = Results::new(CachePolicy::LECAR);
 
-    let file = File::open("datasets/medium/medium_articles.csv").unwrap();
+    let file = File::open(FILE).unwrap();
     let mut reader = csv::Reader::from_reader(file);
 
     for (idx, record) in reader.deserialize().enumerate() {
@@ -78,28 +54,28 @@ fn main() {
             match cache_type {
                 CachePolicy::LFU => {
                     let start = Instant::now();
-                    let (hit, compression_rate) = medium::preprocess::encode(&mut compressed_command, &mut lfu_caches);
+                    let (hit, compression_rate) = encode(&mut compressed_command, &mut lfu_caches);
                     let encode_end = Instant::now();
                     // println!("Compressed size: {}", compressed_command.get_size());
-                    medium::preprocess::decode(&mut compressed_command, &mut lfu_decoders);
+                    decode(&mut compressed_command, &mut lfu_decoders);
                     let end = Instant::now();
                     lfu_res.update(start, encode_end, end, hit, compression_rate);
                 }
                 CachePolicy::LRU => {
                     let start = Instant::now();
-                    let (hit, compression_rate) = medium::preprocess::encode(&mut compressed_command, &mut lru_caches);
+                    let (hit, compression_rate) = encode(&mut compressed_command, &mut lru_caches);
                     let encode_end = Instant::now();
                     // println!("Compressed size: {}", compressed_command.get_size());
-                    medium::preprocess::decode(&mut compressed_command, &mut lru_decoders);
+                    decode(&mut compressed_command, &mut lru_decoders);
                     let end = Instant::now();
                     lru_res.update(start, encode_end, end, hit, compression_rate);
                 }
                 CachePolicy::LECAR => {
                     let start = Instant::now();
-                    let (hit, compression_rate) = medium::preprocess::encode(&mut compressed_command, &mut lecar_caches);
+                    let (hit, compression_rate) = encode(&mut compressed_command, &mut lecar_caches);
                     let encode_end = Instant::now();
                     // println!("Compressed size: {}", compressed_command.get_size());
-                    medium::preprocess::decode(&mut compressed_command, &mut lecar_decoders);
+                    decode(&mut compressed_command, &mut lecar_decoders);
                     let end = Instant::now();
                     lecar_res.update(start, encode_end, end, hit, compression_rate);
                 }
@@ -207,4 +183,32 @@ fn main() {
         }
     }
      */
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use super::*;
+    use crate::medium::MediumRecord;
+
+    #[test]
+    fn test_medium() {
+        /*
+        let file = File::open("datasets/examples.medium/Train.csv").unwrap();
+        let mut reader = csv::Reader::from_reader(file);
+
+
+        for record in reader.deserialize() {
+            let record: MediumRecord = record.unwrap();
+            println!("{:?}\n", record);
+        }
+        */
+
+        let e = MaybeEncoded::Encoded(5);
+        let de = MaybeEncoded::Decoded("Welcome".to_string());
+        println!("e: {}, de: {}", e.get_size(), de.get_size());
+        assert!(de.get_size() > e.get_size())
+    }
 }

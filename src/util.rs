@@ -1,10 +1,10 @@
-use crate::CachePolicy;
 use histogram::Histogram;
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::Instant;
+use strum_macros::EnumIter;
 
-pub(crate) struct Results {
+pub struct Results {
     cache_type: CachePolicy,
     encode_histo: Histogram,
     decode_histo: Histogram,
@@ -14,7 +14,7 @@ pub(crate) struct Results {
 }
 
 impl Results {
-    pub(crate) fn new(cache_type: CachePolicy) -> Self {
+    pub fn new(cache_type: CachePolicy) -> Self {
         Self {
             cache_type,
             encode_histo: Default::default(),
@@ -25,7 +25,7 @@ impl Results {
         }
     }
 
-    pub(crate) fn update(
+    pub fn update(
         &mut self,
         start: Instant,
         encode_end: Instant,
@@ -80,4 +80,11 @@ impl fmt::Display for Results {
             hit_rate,
         )
     }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, EnumIter)]
+pub enum CachePolicy {
+    LFU,
+    LRU,
+    LECAR,
 }

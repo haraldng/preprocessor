@@ -1,5 +1,5 @@
-use crate::{UniCache};
-use crate::medium::{EncodedMediumRecord, MaybeEncoded, MediumRecord, Record};
+use preprocessor::cache::unicache::UniCache;
+use crate::util::{EncodedMediumRecord, MaybeEncoded, MediumRecord, Record};
 
 pub const PUBLICATION: usize = 0;
 pub const TAGS: usize = 1;
