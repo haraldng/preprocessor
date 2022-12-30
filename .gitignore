@@ -4,3 +4,5 @@
 *.iml
 *.zip
 raw_queries.txt
+datasets/medium/medium_articles.csv
+datasets/hotels/Hotel_Reviews.csv
