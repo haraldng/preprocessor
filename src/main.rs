@@ -1,16 +1,13 @@
-mod cache;
-mod lecar_cache;
-mod lfu_cache;
 mod load;
-mod lru_cache;
+
 mod preprocess;
 mod util;
+mod cache;
+mod medium;
 
-use crate::cache::{CacheType, UniCache};
-use crate::lecar_cache::LecarUniCache;
-use crate::lfu_cache::LfuUniCache;
+
+use crate::cache::unicache::*;
 use crate::load::StoreCommand;
-use crate::lru_cache::LruUniCache;
 use crate::preprocess::{decode, encode};
 use crate::util::Results;
 use histogram::Histogram;
@@ -18,11 +15,15 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::time::Instant;
 use strum::IntoEnumIterator;
+use crate::cache::lecar_cache::LecarUniCache;
+use crate::cache::lfu_cache::LfuUniCache;
+use crate::cache::lru_cache::LruUniCache;
+use crate::medium::{MediumRecord, Record};
 
 type CacheKey = String;
-const CACHE_CAPACITY: usize = 500;
+const CACHE_CAPACITY: usize = 500000;
 const NUM_QUERIES: i64 = -1; // -1 to run the whole benchmark
-const FILE: &str = "queries-sample.txt";   // change this to run sample or full dataset.
+const FILE: &str = "datasets/medium/Train.csv";   // change this to run sample or full dataset.
 
 fn main() {
     let total_start = Instant::now();
@@ -32,9 +33,93 @@ fn main() {
     let mut lru_cache = LruUniCache::new(CACHE_CAPACITY);
     let mut lecar_cache = LecarUniCache::new(CACHE_CAPACITY);
 
-    let mut lfu_res = Results::new(CacheType::LFU);
-    let mut lru_res = Results::new(CacheType::LRU);
-    let mut lecar_res = Results::new(CacheType::LECAR);
+    let mut lfu_decoder = LfuUniCache::new(CACHE_CAPACITY);
+    let mut lru_decoder = LruUniCache::new(CACHE_CAPACITY);
+    let mut lecar_decoder = LecarUniCache::new(CACHE_CAPACITY);
+
+    let mut lfu_res = Results::new(CachePolicy::LFU);
+    let mut lru_res = Results::new(CachePolicy::LRU);
+    let mut lecar_res = Results::new(CachePolicy::LECAR);
+
+    let file = File::open("datasets/medium/Train.csv").unwrap();
+    let mut reader = csv::Reader::from_reader(file);
+
+    for record in reader.deserialize() {
+        let record: MediumRecord = record.unwrap();
+        println!("\n{:?}", record);
+        let command = Record::Decoded(record);
+        println!("size: {}", command.get_size());
+
+        for cache_type in CachePolicy::iter() {
+            let mut compressed_command = command.clone();
+            match cache_type {
+                CachePolicy::LFU => {
+                    let start = Instant::now();
+                    let (hit, compression_rate) = medium::preprocess::encode(&mut compressed_command, &mut lfu_cache);
+                    let encode_end = Instant::now();
+                    println!("Compressed size: {}", compressed_command.get_size());
+                    medium::preprocess::decode(&mut compressed_command, &mut lfu_decoder);
+                    let end = Instant::now();
+                    lfu_res.update(start, encode_end, end, hit, compression_rate);
+                }
+                CachePolicy::LRU => {
+                    let start = Instant::now();
+                    let (hit, compression_rate) = medium::preprocess::encode(&mut compressed_command, &mut lru_cache);
+                    let encode_end = Instant::now();
+                    println!("Compressed size: {}", compressed_command.get_size());
+                    medium::preprocess::decode(&mut compressed_command, &mut lru_decoder);
+                    let end = Instant::now();
+                    lru_res.update(start, encode_end, end, hit, compression_rate);
+                }
+                CachePolicy::LECAR => {
+                    let start = Instant::now();
+                    let (hit, compression_rate) = medium::preprocess::encode(&mut compressed_command, &mut lecar_cache);
+                    let encode_end = Instant::now();
+                    println!("Compressed size: {}", compressed_command.get_size());
+                    medium::preprocess::decode(&mut compressed_command, &mut lecar_decoder);
+                    let end = Instant::now();
+                    lecar_res.update(start, encode_end, end, hit, compression_rate);
+                }
+            }
+            assert_eq!(compressed_command, command);
+        }
+        query_len_histo.increment(command.get_size() as u64).unwrap();
+    }
+    let total_end = Instant::now();
+    /*** Print Results ***/
+    println!("Total time: {:?}", total_end.duration_since(total_start));
+
+    println!(
+        "Number of Queries: {}. Query length: Avg: {}, p50: {}, p95: {}, Min: {}, Max: {}, StdDev: {}",
+        query_len_histo.entries(),
+        query_len_histo.mean().unwrap(),
+        query_len_histo.percentile(50f64).unwrap(),
+        query_len_histo.percentile(95f64).unwrap(),
+        query_len_histo.minimum().unwrap(),
+        query_len_histo.maximum().unwrap(),
+        query_len_histo.stddev().unwrap(),
+    );
+
+    for cache_type in CachePolicy::iter() {
+        match cache_type {
+            CachePolicy::LFU => println!("{}", lfu_res),
+            CachePolicy::LRU => println!("{}", lru_res),
+            CachePolicy::LECAR => println!("{}", lecar_res),
+        }
+    }
+
+
+    /*
+    let total_start = Instant::now();
+    let mut query_len_histo = Histogram::new();
+
+    let mut lfu_cache = LfuUniCache::new(CACHE_CAPACITY);
+    let mut lru_cache = LruUniCache::new(CACHE_CAPACITY);
+    let mut lecar_cache = LecarUniCache::new(CACHE_CAPACITY);
+
+    let mut lfu_res = Results::new(CachePolicy::LFU);
+    let mut lru_res = Results::new(CachePolicy::LRU);
+    let mut lecar_res = Results::new(CachePolicy::LECAR);
 
     let file = File::open(FILE).unwrap();
     let reader = BufReader::new(file);
@@ -46,10 +131,10 @@ fn main() {
             id: 0,
             sql: line.unwrap(),
         };
-        for cache_type in CacheType::iter() {
+        for cache_type in CachePolicy::iter() {
             let mut raw_command = command.clone();
             match cache_type {
-                CacheType::LFU => {
+                CachePolicy::LFU => {
                     let start = Instant::now();
                     let (hit, compression_rate) = encode(&mut raw_command, &mut lfu_cache);
                     let encode_end = Instant::now();
@@ -57,7 +142,7 @@ fn main() {
                     let end = Instant::now();
                     lfu_res.update(start, encode_end, end, hit, compression_rate);
                 }
-                CacheType::LRU => {
+                CachePolicy::LRU => {
                     let start = Instant::now();
                     let (hit, compression_rate) = encode(&mut raw_command, &mut lru_cache);
                     let encode_end = Instant::now();
@@ -65,7 +150,7 @@ fn main() {
                     let end = Instant::now();
                     lru_res.update(start, encode_end, end, hit, compression_rate);
                 }
-                CacheType::LECAR => {
+                CachePolicy::LECAR => {
                     let start = Instant::now();
                     let (hit, compression_rate) = encode(&mut raw_command, &mut lecar_cache);
                     let encode_end = Instant::now();
@@ -91,11 +176,12 @@ fn main() {
         query_len_histo.maximum().unwrap(),
         query_len_histo.stddev().unwrap(),
     );
-    for cache_type in CacheType::iter() {
+    for cache_type in CachePolicy::iter() {
         match cache_type {
-            CacheType::LFU => println!("{}", lfu_res),
-            CacheType::LRU => println!("{}", lru_res),
-            CacheType::LECAR => println!("{}", lecar_res),
+            CachePolicy::LFU => println!("{}", lfu_res),
+            CachePolicy::LRU => println!("{}", lru_res),
+            CachePolicy::LECAR => println!("{}", lecar_res),
         }
     }
+     */
 }
