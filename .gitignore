@@ -11,3 +11,5 @@ datasets/nyt/nyt.csv
 *.TAG
 examples/target
 examples/*/target
+datasets/*/clean-sorted.csv
+datasets/email/emails.csv

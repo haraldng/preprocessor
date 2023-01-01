@@ -1,0 +1,22 @@
+[package]
+name = "nyt"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static = { version = "1.4.0" }
+indexmap = {version = "1.9.2", features = ["serde-1"] }
+lru = { version = "0.8.1" }
+lfu_cache = { version = "1.2.2" }
+histogram = "*"
+lecar = { git = "https://github.com/Wkkkkk/lecar" }
+strum = "0.24.1"
+strum_macros = "0.24.3"
+csv = "1.1.6"
+serde = "1.0.152"
+preprocessor = { path = "../.." }
+
+[profile.release]
+lto = true
