@@ -31,11 +31,10 @@ fn main() {
     let mut lru_decoders = [false; NUM_CACHES].map(|_| LruUniCache::new(CACHE_CAPACITY));
     let mut lru_res = Results::new(CachePolicy::LRU);
 
-    /*
-        let mut lecar_caches = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
-        let mut lecar_decoders = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
-        let mut lecar_res = Results::new(CachePolicy::LECAR);
-    */
+    let mut lecar_caches = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
+    let mut lecar_decoders = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
+    let mut lecar_res = Results::new(CachePolicy::LECAR);
+
     let file = File::open(FILE).unwrap();
     let mut reader = csv::Reader::from_reader(file);
 
@@ -71,23 +70,22 @@ fn main() {
                     lru_res.update(start, encode_end, end, hit, compression_rate);
                 }
                 CachePolicy::LECAR => {
-                    continue; // TODO
-                              /*
-                              let start = Instant::now();
-                              let (hit, compression_rate) = encode(&mut processed, &mut lecar_caches);
-                              let encode_end = Instant::now();
-                              // println!("Compressed size: {}", compressed_command.get_size());
-                              decode(&mut processed, &mut lecar_decoders);
-                              let end = Instant::now();
-                              lecar_res.update(start, encode_end, end, hit, compression_rate);
+                    // continue; // TODO
+                      let start = Instant::now();
+                      let (hit, compression_rate) = encode(&mut processed, &mut lecar_caches);
+                      let encode_end = Instant::now();
+                      // println!("Compressed size: {}", compressed_command.get_size());
+                      decode(&mut processed, &mut lecar_decoders);
+                      let end = Instant::now();
+                      lecar_res.update(start, encode_end, end, hit, compression_rate);
 
-                               */
                 }
             }
             assert_eq!(
                 processed, raw,
-                "Incorrect encode/decode with {:?}",
-                cache_type
+                "{}: Incorrect encode/decode with {:?}",
+                idx,
+                cache_type,
             );
         }
 
@@ -114,7 +112,7 @@ fn main() {
             CachePolicy::LFU => println!("{}", lfu_res),
             CachePolicy::LRU => println!("{}", lru_res),
             CachePolicy::LECAR => {
-                // println!("{}", lecar_res)
+                println!("{}", lecar_res)
             }
         }
     }
