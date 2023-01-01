@@ -1,5 +1,5 @@
-use lecar::controller::Controller;
 use crate::cache::unicache::UniCache;
+use lecar::controller::Controller;
 
 pub struct LecarUniCache {
     lecar_cache: Controller,

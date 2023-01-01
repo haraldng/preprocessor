@@ -16,11 +16,10 @@ pub struct RawHeader {
     pub x_filename: String,
 }
 
-
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub struct EncodedHeader {
-    pub message_id: String,
-    pub date: String,
+    pub message_id: Vec<MaybeEncoded>,
+    pub date: MaybeEncoded,
     pub from: MaybeEncoded,
     pub to: Vec<MaybeEncoded>,
     pub subject: Vec<MaybeEncoded>,
@@ -28,11 +27,10 @@ pub struct EncodedHeader {
     pub x_to: Vec<MaybeEncoded>,
     pub x_cc: Vec<MaybeEncoded>,
     pub x_bcc: Vec<MaybeEncoded>,
-    pub x_folder: Vec<MaybeEncoded>,
+    pub x_folder: MaybeEncoded,
     pub x_origin: MaybeEncoded,
     pub x_filename: MaybeEncoded,
 }
-
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub enum Record {
@@ -41,13 +39,19 @@ pub enum Record {
     None,
 }
 
+impl Default for Record {
+    fn default() -> Self {
+        Record::None
+    }
+}
+
 impl Record {
     pub(crate) fn get_size(&self) -> usize {
         let mut size = 0;
         match self {
             Record::Encoded(e) => {
-                // size += e.message_id.len();
-                size += e.date.len();
+                e.message_id.iter().for_each(|x| size += x.get_size());
+                size += e.date.get_size();
                 size += e.from.get_size();
                 e.to.iter().for_each(|x| size += x.get_size());
                 e.subject.iter().for_each(|x| size += x.get_size());
@@ -55,14 +59,12 @@ impl Record {
                 e.x_to.iter().for_each(|x| size += x.get_size());
                 e.x_cc.iter().for_each(|x| size += x.get_size());
                 e.x_bcc.iter().for_each(|x| size += x.get_size());
-                e.x_folder.iter().for_each(|x| size += x.get_size());
+                size += e.x_folder.get_size();
                 size += e.x_origin.get_size();
                 size += e.x_filename.get_size();
-
-            },
+            }
             Record::Decoded(d) => {
-                // size += d.message_id.len();
-                // size += d.keywords.len();
+                size += d.message_id.len();
                 size += d.date.len();
                 size += d.from.len();
                 size += d.to.len();
@@ -74,41 +76,41 @@ impl Record {
                 size += d.x_folder.len();
                 size += d.x_origin.len();
                 size += d.x_filename.len();
-            },
+            }
             Record::None => {
                 unimplemented!()
-            },
+            }
         }
         size
     }
-/*
-    pub(crate) fn get_approximate_encoded_size(&self) -> usize {
-        let mut size = 0;
-        match self {
-            Record::Decoded(d) => {
-                size += d.web_url.len()/2;
-                // size += d.keywords.len();
-                size += d.pub_date.len();
-                size += 1;
-                size += 1;
-                size += 1;
-                size += 1;
-                size += d.main_headline.len();
-                size += d.print_headline.len();
-                size += 3;
-            },
-            Record::None => {
-            },
+    /*
+        pub(crate) fn get_approximate_encoded_size(&self) -> usize {
+            let mut size = 0;
+            match self {
+                Record::Decoded(d) => {
+                    size += d.web_url.len()/2;
+                    // size += d.keywords.len();
+                    size += d.pub_date.len();
+                    size += 1;
+                    size += 1;
+                    size += 1;
+                    size += 1;
+                    size += d.main_headline.len();
+                    size += d.print_headline.len();
+                    size += 3;
+                },
+                Record::None => {
+                },
+            }
+            size
         }
-        size
-    }
-*/
+    */
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub enum MaybeEncoded {
     Encoded(usize),
-    Decoded(String)
+    Decoded(String),
 }
 
 impl MaybeEncoded {
@@ -119,6 +121,4 @@ impl MaybeEncoded {
             MaybeEncoded::Decoded(s) => s.len(),
         }
     }
-
-
 }

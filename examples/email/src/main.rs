@@ -1,40 +1,41 @@
-use preprocessor::cache::unicache::*;
-use preprocessor::util::*;
 use histogram::Histogram;
-use std::fs::File;
-use std::time::Instant;
-use strum::IntoEnumIterator;
+use preprocess::{decode, encode, NUM_CACHES};
 use preprocessor::cache::lecar_cache::LecarUniCache;
 use preprocessor::cache::lfu_cache::LfuUniCache;
 use preprocessor::cache::lru_cache::LruUniCache;
-use preprocess::{encode, decode, NUM_CACHES};
+use preprocessor::cache::unicache::*;
+use preprocessor::util::*;
+use std::fs::File;
+use std::time::Instant;
+use strum::IntoEnumIterator;
 
-mod util;
 mod preprocess;
+mod util;
 // use preprocess::{encode, decode};
 use util::*;
 
 const CACHE_CAPACITY: usize = u8::MAX as usize;
 // const CACHE_CAPACITY: usize = 500000;
 const NUM_QUERIES: i64 = -1; // -1 to run the whole benchmark
-const FILE: &str = "../../datasets/email/train.csv";   // change this to run sample or full dataset.
+const FILE: &str = "../../datasets/email/clean-sorted.csv"; // change this to run sample or full dataset.
 
 fn main() {
     let total_start = Instant::now();
     let mut query_len_histo = Histogram::new();
+
     let mut lfu_caches = [false; NUM_CACHES].map(|_| LfuUniCache::new(CACHE_CAPACITY));
     let mut lfu_decoders = [false; NUM_CACHES].map(|_| LfuUniCache::new(CACHE_CAPACITY));
+    let mut lfu_res = Results::new(CachePolicy::LFU);
 
     let mut lru_caches = [false; NUM_CACHES].map(|_| LruUniCache::new(CACHE_CAPACITY));
     let mut lru_decoders = [false; NUM_CACHES].map(|_| LruUniCache::new(CACHE_CAPACITY));
-
-    let mut lecar_caches = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
-    let mut lecar_decoders = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
-
-    let mut lfu_res = Results::new(CachePolicy::LFU);
     let mut lru_res = Results::new(CachePolicy::LRU);
-    let mut lecar_res = Results::new(CachePolicy::LECAR);
 
+    /*
+        let mut lecar_caches = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
+        let mut lecar_decoders = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
+        let mut lecar_res = Results::new(CachePolicy::LECAR);
+    */
     let file = File::open(FILE).unwrap();
     let mut reader = csv::Reader::from_reader(file);
 
@@ -70,16 +71,24 @@ fn main() {
                     lru_res.update(start, encode_end, end, hit, compression_rate);
                 }
                 CachePolicy::LECAR => {
-                    let start = Instant::now();
-                    let (hit, compression_rate) = encode(&mut processed, &mut lecar_caches);
-                    let encode_end = Instant::now();
-                    // println!("Compressed size: {}", compressed_command.get_size());
-                    decode(&mut processed, &mut lecar_decoders);
-                    let end = Instant::now();
-                    lecar_res.update(start, encode_end, end, hit, compression_rate);
+                    continue; // TODO
+                              /*
+                              let start = Instant::now();
+                              let (hit, compression_rate) = encode(&mut processed, &mut lecar_caches);
+                              let encode_end = Instant::now();
+                              // println!("Compressed size: {}", compressed_command.get_size());
+                              decode(&mut processed, &mut lecar_decoders);
+                              let end = Instant::now();
+                              lecar_res.update(start, encode_end, end, hit, compression_rate);
+
+                               */
                 }
             }
-            assert_eq!(processed, raw);
+            assert_eq!(
+                processed, raw,
+                "Incorrect encode/decode with {:?}",
+                cache_type
+            );
         }
 
         query_len_histo.increment(raw.get_size() as u64).unwrap();
@@ -104,35 +113,9 @@ fn main() {
         match cache_type {
             CachePolicy::LFU => println!("{}", lfu_res),
             CachePolicy::LRU => println!("{}", lru_res),
-            CachePolicy::LECAR => println!("{}", lecar_res),
+            CachePolicy::LECAR => {
+                // println!("{}", lecar_res)
+            }
         }
-    }
-}
-
-
-
-#[cfg(test)]
-mod tests {
-    use std::fs::File;
-    use super::*;
-    use crate::medium::MediumRecord;
-
-    #[test]
-    fn test_medium() {
-        /*
-        let file = File::open("datasets/examples.medium/Train.csv").unwrap();
-        let mut reader = csv::Reader::from_reader(file);
-
-
-        for record in reader.deserialize() {
-            let record: MediumRecord = record.unwrap();
-            println!("{:?}\n", record);
-        }
-        */
-
-        let e = MaybeEncoded::Encoded(5);
-        let de = MaybeEncoded::Decoded("Welcome".to_string());
-        println!("e: {}, de: {}", e.get_size(), de.get_size());
-        assert!(de.get_size() > e.get_size())
     }
 }
