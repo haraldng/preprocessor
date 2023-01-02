@@ -202,6 +202,7 @@ dependencies = [
  "lfu_cache",
  "lru",
  "preprocessor",
+ "regex",
  "serde",
  "strum",
  "strum_macros",

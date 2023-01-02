@@ -75,7 +75,6 @@ dependencies = [
  "csv",
  "histogram",
  "indexmap",
- "lazy_static",
  "lecar",
  "lfu_cache",
  "lru",

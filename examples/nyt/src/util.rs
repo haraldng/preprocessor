@@ -1,9 +1,11 @@
+use crate::preprocess::MaybeEncodedURL;
+use lecar::cache::Cache;
 use serde::Deserialize;
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub struct RawArticle {
     pub web_url: String,
-    pub keywords: String,
+    // pub keywords: String,
     pub pub_date: String,
     pub document_type: String,
     pub news_desk: String,
@@ -14,21 +16,24 @@ pub struct RawArticle {
     pub by: String,
 }
 
-
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
-pub struct EncodedMediumRecord {
-    pub(crate) post_time: String,
-    pub(crate) post_name: Vec<MaybeEncoded>,
-    pub(crate) post_author: Vec<MaybeEncoded>,
-    pub(crate) post_publication: MaybeEncoded,
-    pub(crate) post_tags: [MaybeEncoded; 4]
+pub struct EncodedArticle {
+    pub(crate) web_url: MaybeEncodedURL,
+    // pub(crate) keywords: String,
+    pub(crate) pub_date: (MaybeEncoded, String, MaybeEncoded),
+    pub(crate) document_type: MaybeEncoded,
+    pub(crate) news_desk: MaybeEncoded,
+    pub(crate) section_name: MaybeEncoded,
+    pub(crate) type_of_material: MaybeEncoded,
+    pub(crate) main_headline: Vec<MaybeEncoded>,
+    pub(crate) print_headline: Vec<MaybeEncoded>,
+    pub(crate) by: Vec<MaybeEncoded>,
 }
-
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub enum Record {
     Decoded(RawArticle),
-    // Encoded(EncodedMediumRecord),
+    Encoded(EncodedArticle),
     None,
 }
 
@@ -36,15 +41,19 @@ impl Record {
     pub(crate) fn get_size(&self) -> usize {
         let mut size = 0;
         match self {
-            /*
             Record::Encoded(e) => {
-                size += e.post_time.len();
-                size += e.post_publication.get_size();
-                e.post_tags.iter().for_each(|x| size += x.get_size());
-                e.post_name.iter().for_each(|x| size += x.get_size());
-                e.post_author.iter().for_each(|x|  size += x.get_size());
-            },
-            */
+                size += e.web_url.get_size();
+                size += e.pub_date.0.get_size();
+                size += e.pub_date.1.len();
+                size += e.pub_date.2.get_size();
+                size += e.document_type.get_size();
+                size += e.news_desk.get_size();
+                size += e.section_name.get_size();
+                size += e.type_of_material.get_size();
+                e.main_headline.iter().for_each(|x| size += x.get_size());
+                e.print_headline.iter().for_each(|x| size += x.get_size());
+                e.by.iter().for_each(|x| size += x.get_size());
+            }
             Record::Decoded(d) => {
                 size += d.web_url.len();
                 // size += d.keywords.len();
@@ -56,50 +65,33 @@ impl Record {
                 size += d.main_headline.len();
                 size += d.print_headline.len();
                 size += d.by.len();
-            },
+            }
             Record::None => {
-                let url = 5;
-            },
+                unimplemented!()
+            }
         }
         size
     }
+}
 
-    pub(crate) fn get_approximate_encoded_size(&self) -> usize {
-        let mut size = 0;
-        match self {
-            Record::Decoded(d) => {
-                size += d.web_url.len()/2;
-                // size += d.keywords.len();
-                size += d.pub_date.len();
-                size += 1;
-                size += 1;
-                size += 1;
-                size += 1;
-                size += d.main_headline.len();
-                size += d.print_headline.len();
-                size += 3;
-            },
-            Record::None => {
-            },
-        }
-        size
+impl Default for Record {
+    fn default() -> Self {
+        Record::None
     }
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub enum MaybeEncoded {
     Encoded(usize),
-    Decoded(String)
+    Decoded(String),
 }
 
 impl MaybeEncoded {
-    fn get_size(&self) -> usize {
+    pub(crate) fn get_size(&self) -> usize {
         match self {
             // MaybeEncoded::Encoded(i) => std::mem::size_of_val(i),
             MaybeEncoded::Encoded(_) => 1,
             MaybeEncoded::Decoded(s) => s.len(),
         }
     }
-
-
 }
