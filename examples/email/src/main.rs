@@ -70,7 +70,7 @@ fn main() {
                     lru_res.update(start, encode_end, end, hit, compression_rate);
                 }
                 CachePolicy::LECAR => {
-                    // continue; // TODO
+                    continue; // TODO
                       let start = Instant::now();
                       let (hit, compression_rate) = encode(&mut processed, &mut lecar_caches);
                       let encode_end = Instant::now();
@@ -90,7 +90,6 @@ fn main() {
         }
 
         query_len_histo.increment(raw.get_size() as u64).unwrap();
-        // approx_query_len_histo.increment(record.get_approximate_encoded_size() as u64).unwrap();
     }
     let total_end = Instant::now();
     /*** Print Results ***/
@@ -112,7 +111,7 @@ fn main() {
             CachePolicy::LFU => println!("{}", lfu_res),
             CachePolicy::LRU => println!("{}", lru_res),
             CachePolicy::LECAR => {
-                println!("{}", lecar_res)
+                // println!("{}", lecar_res)
             }
         }
     }
