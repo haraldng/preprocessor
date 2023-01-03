@@ -80,14 +80,16 @@ pub fn encode<U: UniCache<String>>(
 }
 
 fn try_encode<U: UniCache<String>>(s: String, cache: &mut U) -> MaybeEncoded {
-    match cache.get_encoded_index(&s) {
-        Some(i) => MaybeEncoded::Encoded(i),
-        None => {
-            if s.len() > THRESHOLD {
+    if s.len() > THRESHOLD {
+        match cache.get_encoded_index(&s) {
+            Some(i) => MaybeEncoded::Encoded(i),
+            None => {
                 cache.put(s.clone());
+                MaybeEncoded::Decoded(s)
             }
-            MaybeEncoded::Decoded(s)
         }
+    } else {
+        MaybeEncoded::Decoded(s)
     }
 }
 
