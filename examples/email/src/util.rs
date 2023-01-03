@@ -83,33 +83,11 @@ impl Record {
         }
         size
     }
-    /*
-        pub(crate) fn get_approximate_encoded_size(&self) -> usize {
-            let mut size = 0;
-            match self {
-                Record::Decoded(d) => {
-                    size += d.web_url.len()/2;
-                    // size += d.keywords.len();
-                    size += d.pub_date.len();
-                    size += 1;
-                    size += 1;
-                    size += 1;
-                    size += 1;
-                    size += d.main_headline.len();
-                    size += d.print_headline.len();
-                    size += 3;
-                },
-                Record::None => {
-                },
-            }
-            size
-        }
-    */
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub enum MaybeEncoded {
-    Encoded(usize),
+    Encoded(u8),
     Decoded(String),
 }
 

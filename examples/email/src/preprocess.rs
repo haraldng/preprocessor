@@ -1,177 +1,191 @@
 use crate::util::{EncodedHeader, MaybeEncoded, Record};
 use crate::RawHeader;
-use preprocessor::cache::unicache::UniCache;
+use preprocessor::cache::unicache::{OmniCache, UniCache};
 
-pub const FROM: usize = 0;
-pub const TO: usize = 1;
-pub const SUBJECT: usize = 2;
-pub const X_FROM: usize = 3;
-pub const X_TO: usize = 4;
-pub const X_CC: usize = 5;
-pub const X_BCC: usize = 6;
-pub const X_FOLDER: usize = 7;
-pub const X_ORIGIN: usize = 8;
-pub const X_FILENAME: usize = 9;
-pub const MESSAGE_ID: usize = 10;
-pub const DATE: usize = 11;
-
-pub const NUM_CACHES: usize = DATE + 1;
 const THRESHOLD: usize = 3;
 const NUM_MESSAGE_ID_ELEMENTS: usize = 3;
 
-pub fn encode<U: UniCache<String>>(
-    record: &mut Record,
-    cache: &mut [U; NUM_CACHES],
-) -> (bool, usize) {
-    // split sql into template and parameters
-    let rec = std::mem::take(record);
-    let raw_size = rec.get_size() as f32;
-    match rec {
-        Record::Decoded(me) => {
-            let message_id = {
-                let splitted = me.message_id.splitn(NUM_MESSAGE_ID_ELEMENTS, '.');
-                splitted
-                    .enumerate()
-                    .map(|(i, x)| {
-                        let x = x.to_string();
-                        if i == NUM_MESSAGE_ID_ELEMENTS - 1 {
-                            try_encode(x, &mut cache[MESSAGE_ID])
-                        } else {
-                            MaybeEncoded::Decoded(x)
-                        }
-                    })
-                    .collect()
-            };
-            let date = try_encode(me.date, &mut cache[DATE]);
-            let from = try_encode(me.from, &mut cache[FROM]);
-            let to = try_encode_vec(me.to, &mut cache[TO]);
-            let subject = try_encode_vec(me.subject, &mut cache[SUBJECT]);
-            let x_from = try_encode(me.x_from, &mut cache[X_FROM]);
-            let x_to = try_encode_vec(me.x_to, &mut cache[X_TO]);
-            let x_cc = try_encode_vec(me.x_cc, &mut cache[X_CC]);
-            let x_bcc = try_encode_vec(me.x_bcc, &mut cache[X_BCC]);
-            let x_folder = try_encode(me.x_folder, &mut cache[X_FOLDER]);
-            let x_origin = try_encode(me.x_origin, &mut cache[X_ORIGIN]);
-            let x_filename = try_encode(me.x_filename, &mut cache[X_FILENAME]);
-            let encoded = EncodedHeader {
-                message_id,
-                date,
-                from,
-                to,
-                subject,
-                x_from,
-                x_to,
-                x_cc,
-                x_bcc,
-                x_folder,
-                x_origin,
-                x_filename,
-            };
-            // println!("ENCODED: {:?}", encoded);
-            *record = Record::Encoded(encoded);
-        }
-        _ => unimplemented!(),
-    }
-    let compressed_size = record.get_size() as f32;
-    (
-        false,
-        (100f32 * (1f32 - compressed_size / raw_size)) as usize,
-    )
+pub struct EmailUniCache<U: UniCache> {
+    from_cache: U,
+    to_cache: U,
+    subject_cache: U,
+    x_from_cache: U,
+    x_to_cache: U,
+    x_cc_cache: U,
+    x_bcc_cache: U,
+    x_folder_cache: U,
+    x_origin_cache: U,
+    x_filename_cache: U,
+    message_id_cache: U,
+    date_cache: U,
 }
 
-fn try_encode<U: UniCache<String>>(s: String, cache: &mut U) -> MaybeEncoded {
-    if s.len() > THRESHOLD {
-        match cache.get_encoded_index(&s) {
-            Some(i) => MaybeEncoded::Encoded(i),
-            None => {
-                cache.put(s.clone());
-                MaybeEncoded::Decoded(s)
-            }
-        }
-    } else {
-        MaybeEncoded::Decoded(s)
-    }
-}
-
-fn try_encode_vec<U: UniCache<String>>(s: String, cache: &mut U) -> Vec<MaybeEncoded> {
-    s.split_whitespace()
-        .map(|x| try_encode(x.into(), cache))
-        .collect()
-}
-
-fn try_decode<U: UniCache<String>>(x: MaybeEncoded, cache: &mut U) -> String {
-    match x {
-        MaybeEncoded::Encoded(i) => cache.get_with_encoded_index(i),
-        MaybeEncoded::Decoded(s) => {
-            if s.len() > THRESHOLD {
-                cache.put(s.clone());
-            }
-            s
+impl<U: UniCache> OmniCache<Record, U> for EmailUniCache<U> {
+    fn new(capacity: usize) -> Self {
+        Self {
+            from_cache: U::new(capacity),
+            to_cache: U::new(capacity),
+            subject_cache: U::new(capacity),
+            x_from_cache: U::new(capacity),
+            x_to_cache: U::new(capacity),
+            x_cc_cache: U::new(capacity),
+            x_bcc_cache: U::new(capacity),
+            x_folder_cache: U::new(capacity),
+            x_origin_cache: U::new(capacity),
+            x_filename_cache: U::new(capacity),
+            message_id_cache: U::new(capacity),
+            date_cache: U::new(capacity)
         }
     }
-}
 
-fn try_decode_vec<U: UniCache<String>>(
-    v: Vec<MaybeEncoded>,
-    cache: &mut U,
-    join_on: &str,
-) -> String {
-    v.into_iter()
-        .map(|x| try_decode(x, cache))
-        .collect::<Vec<String>>()
-        .join(join_on)
-}
-
-pub fn decode<U: UniCache<String>>(record: &mut Record, cache: &mut [U; NUM_CACHES]) {
-    let rec = std::mem::take(record);
-    let decoded = match rec {
-        Record::Encoded(e) => {
-            let message_id = {
-                e.message_id
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, x)| {
-                        if i == NUM_MESSAGE_ID_ELEMENTS - 1 {
-                            try_decode(x, &mut cache[MESSAGE_ID])
-                        } else {
-                            match x {
-                                MaybeEncoded::Decoded(d) => d,
-                                _ => unimplemented!(),
+    fn encode(&mut self, data: &mut Record) {
+        // split sql into template and parameters
+        let rec = std::mem::take(data);
+        match rec {
+            Record::Decoded(me) => {
+                let message_id = {
+                    let splitted = me.message_id.splitn(NUM_MESSAGE_ID_ELEMENTS, '.');
+                    splitted
+                        .enumerate()
+                        .map(|(i, x)| {
+                            let x = x.to_string();
+                            if i == NUM_MESSAGE_ID_ELEMENTS - 1 {
+                                Self::try_encode(x, &mut self.message_id_cache)
+                            } else {
+                                MaybeEncoded::Decoded(x)
                             }
-                        }
-                    })
-                    .collect::<Vec<String>>()
-                    .join(".")
-            };
-            let date = try_decode(e.date, &mut cache[DATE]);
-            let from = try_decode(e.from, &mut cache[FROM]);
-            let to = try_decode_vec(e.to, &mut cache[TO], " ");
-            let subject = try_decode_vec(e.subject, &mut cache[SUBJECT], " ");
-            let x_from = try_decode(e.x_from, &mut cache[X_FROM]);
-            let x_to = try_decode_vec(e.x_to, &mut cache[X_TO], " ");
-            let x_cc = try_decode_vec(e.x_cc, &mut cache[X_CC], " ");
-            let x_bcc = try_decode_vec(e.x_bcc, &mut cache[X_BCC], " ");
-            let x_folder = try_decode(e.x_folder, &mut cache[X_FOLDER]);
-            let x_origin = try_decode(e.x_origin, &mut cache[X_ORIGIN]);
-            let x_filename = try_decode(e.x_filename, &mut cache[X_FILENAME]);
-
-            let m = RawHeader {
-                message_id,
-                date,
-                from,
-                to,
-                subject,
-                x_from,
-                x_to,
-                x_cc,
-                x_bcc,
-                x_folder,
-                x_origin,
-                x_filename,
-            };
-            Record::Decoded(m)
+                        })
+                        .collect()
+                };
+                let date = Self::try_encode(me.date, &mut self.date_cache);
+                let from = Self::try_encode(me.from, &mut self.from_cache);
+                let to = Self::try_encode_vec(me.to, &mut self.to_cache);
+                let subject = Self::try_encode_vec(me.subject, &mut self.subject_cache);
+                let x_from = Self::try_encode(me.x_from, &mut self.x_from_cache);
+                let x_to = Self::try_encode_vec(me.x_to, &mut self.x_to_cache);
+                let x_cc = Self::try_encode_vec(me.x_cc, &mut self.x_cc_cache);
+                let x_bcc = Self::try_encode_vec(me.x_bcc, &mut self.x_bcc_cache);
+                let x_folder = Self::try_encode(me.x_folder, &mut self.x_folder_cache);
+                let x_origin = Self::try_encode(me.x_origin, &mut self.x_origin_cache);
+                let x_filename = Self::try_encode(me.x_filename, &mut self.x_filename_cache);
+                let encoded = EncodedHeader {
+                    message_id,
+                    date,
+                    from,
+                    to,
+                    subject,
+                    x_from,
+                    x_to,
+                    x_cc,
+                    x_bcc,
+                    x_folder,
+                    x_origin,
+                    x_filename,
+                };
+                // println!("ENCODED: {:?}", encoded);
+                *data = Record::Encoded(encoded);
+            }
+            _ => unimplemented!(),
         }
-        _ => unimplemented!(),
-    };
-    *record = decoded;
+    }
+
+    fn decode(&mut self, data: &mut Record) {
+        let rec = std::mem::take(data);
+        let decoded = match rec {
+            Record::Encoded(e) => {
+                let message_id = {
+                    e.message_id
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, x)| {
+                            if i == NUM_MESSAGE_ID_ELEMENTS - 1 {
+                                Self::try_decode(x, &mut self.message_id_cache)
+                            } else {
+                                match x {
+                                    MaybeEncoded::Decoded(d) => d,
+                                    _ => unimplemented!(),
+                                }
+                            }
+                        })
+                        .collect::<Vec<String>>()
+                        .join(".")
+                };
+                let date = Self::try_decode(e.date, &mut self.date_cache);
+                let from = Self::try_decode(e.from, &mut self.from_cache);
+                let to = Self::try_decode_vec(e.to, &mut self.to_cache, " ");
+                let subject = Self::try_decode_vec(e.subject, &mut self.subject_cache, " ");
+                let x_from = Self::try_decode(e.x_from, &mut self.x_from_cache);
+                let x_to = Self::try_decode_vec(e.x_to, &mut self.x_to_cache, " ");
+                let x_cc = Self::try_decode_vec(e.x_cc, &mut self.x_cc_cache, " ");
+                let x_bcc = Self::try_decode_vec(e.x_bcc, &mut self.x_bcc_cache, " ");
+                let x_folder = Self::try_decode(e.x_folder, &mut self.x_folder_cache);
+                let x_origin = Self::try_decode(e.x_origin, &mut self.x_origin_cache);
+                let x_filename = Self::try_decode(e.x_filename, &mut self.x_filename_cache);
+
+                let m = RawHeader {
+                    message_id,
+                    date,
+                    from,
+                    to,
+                    subject,
+                    x_from,
+                    x_to,
+                    x_cc,
+                    x_bcc,
+                    x_folder,
+                    x_origin,
+                    x_filename,
+                };
+                Record::Decoded(m)
+            }
+            _ => unimplemented!(),
+        };
+        *data = decoded;
+    }
+}
+
+impl<U: UniCache> EmailUniCache<U> {
+
+    fn try_encode(s: String, cache: &mut U) -> MaybeEncoded {
+        if s.len() > THRESHOLD {
+            match cache.get_encoded_index(&s) {
+                Some(i) => MaybeEncoded::Encoded(i),
+                None => {
+                    cache.put(s.clone());
+                    MaybeEncoded::Decoded(s)
+                }
+            }
+        } else {
+            MaybeEncoded::Decoded(s)
+        }
+    }
+
+    fn try_encode_vec(s: String, cache: &mut U) -> Vec<MaybeEncoded> {
+        s.split_whitespace()
+            .map(|x| Self::try_encode(x.into(), cache))
+            .collect()
+    }
+
+    fn try_decode(x: MaybeEncoded, cache: &mut U) -> String {
+        match x {
+            MaybeEncoded::Encoded(i) => cache.get_with_encoded_index(i),
+            MaybeEncoded::Decoded(s) => {
+                if s.len() > THRESHOLD {
+                    cache.put(s.clone());
+                }
+                s
+            }
+        }
+    }
+
+    fn try_decode_vec(
+        v: Vec<MaybeEncoded>,
+        cache: &mut U,
+        join_on: &str,
+    ) -> String {
+        v.into_iter()
+            .map(|x| Self::try_decode(x, cache))
+            .collect::<Vec<String>>()
+            .join(join_on)
+    }
 }
