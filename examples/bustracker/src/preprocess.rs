@@ -1,6 +1,9 @@
-use preprocessor::cache::unicache::UniCache;
+use serde::{Serialize, Deserialize};
+use preprocessor::cache::unicache::{OmniCache, UniCache};
+use omnipaxos_core::storage::Entry;
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::fmt::{Debug, Formatter};
 
 const SEPARATOR: char = '#';
 const RULES: [&str; 2] = [
@@ -12,68 +15,108 @@ lazy_static! {
         [Regex::new(RULES[0]).unwrap(), Regex::new(RULES[1]).unwrap(),];
 }
 
-#[derive(Debug, Clone)]
-pub struct StoreCommand {
-    pub id: usize,
-    pub sql: String,
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum Template {
+    Encoded(u8),
+    Decoded(String)
 }
 
-pub fn encode<U: UniCache<String>>(
-    command: &mut StoreCommand,
-    cache: &mut U,
-) -> (bool, usize) {
-    // split sql into template and parameters
-    let (template, parameters) = split_query(&command.sql);
-    let raw_length = command.sql.len() as f32;
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum Query {
+    Encoded(Template, Vec<String>),
+    Decoded(String),
+    None
+}
 
-    if let Some(index) = cache.get_encoded_index(&template) {
-        // exists in lib.cache
-        // send index and parameters
-        let compressed = format!("1*|*{}*|*{}", index, parameters);
-        let compressed_length = compressed.len() as f32;
-        command.sql = compressed;
-        // lib.cache.update_cache(&template);
-
-        (
-            true,
-            (100f32 * (1f32 - compressed_length / raw_length)) as usize,
-        )
-    } else {
-        // send template and parameters
-        let uncompressed = format!("0*|*{}*|*{}", template.clone(), parameters);
-        // let uncompressed_length = uncompressed.len();
-        command.sql = uncompressed;
-        // update lib.cache for leader
-        cache.put(template);
-
-        (false, 0)
+impl Default for Query {
+    fn default() -> Self {
+        Self::None
     }
 }
 
-pub fn decode<U: UniCache<String>>(command: &mut StoreCommand, cache: &mut U) {
-    let parts: Vec<&str> = command.sql.split("*|*").collect();
-    if parts.len() != 3 {
-        panic!("Unexpected query: {:?}", command.sql);
+impl Entry for Query {}
+
+impl Query {
+    pub(crate) fn get_size(&self) -> usize {
+        let mut size = 0;
+        match self {
+            Query::Encoded(t, params) => {
+                params.iter().for_each(|x| size += x.len());
+                match t {
+                    Template::Encoded(i) => size += std::mem::size_of_val(i),
+                    Template::Decoded(s) => size += s.len(),
+                }
+            },
+            Query::Decoded(s) => size += s.len(),
+            _ => unimplemented!(),
+        }
+        size
+    }
+}
+
+pub struct BustrackerUniCache<U: UniCache>  {
+    cache: U,
+}
+
+impl<U: UniCache> Debug for BustrackerUniCache<U> {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
+        Result::Ok(())
+    }
+}
+
+impl<U: UniCache> OmniCache<Query, U> for BustrackerUniCache<U> {
+    fn new(capacity: usize) -> Self {
+        Self {
+            cache: U::new(capacity)
+        }
     }
 
-    let (compressed, index_or_template, parameters) = (parts[0], parts[1], parts[2]);
+    fn encode(&mut self, data: &mut Query) {
+        // split sql into template and parameters
+        let query = std::mem::take(data);
+        match query {
+            Query::Decoded(s) => {
+                let (template, parameters) = split_query(s);
+                if let Some(index) = self.cache.get_encoded_index(&template) {
+                    // exists in lib.cache
+                    // send index and parameters
+                    // lib.cache.update_cache(&template);
+                    *data = Query::Encoded(Template::Encoded(index), parameters)
+                } else {
+                    // update lib.cache for leader
+                    self.cache.put(template.clone());
+                    *data = Query::Encoded(Template::Decoded(template), parameters)
+                }
+            },
+            _ => unimplemented!(),
+        }
+    }
 
-    let template = if compressed == "1" {
-        // compressed messsage
-        let index = index_or_template.parse::<usize>().unwrap();
-        cache.get_with_encoded_index(index)
-    } else {
-        let template: String = index_or_template.to_string();
-        cache.put(template.clone());
-        template
-    };
-    command.sql = merge_query(&template, parameters);
+    fn decode(&mut self, data: &mut Query) {
+        let query = std::mem::take(data);
+        match query {
+            Query::Encoded(t, parameters) => {
+                let template = match t {
+                    Template::Encoded(index) => {
+                        self.cache.get_with_encoded_index(index)
+                    },
+                    Template::Decoded(template) => {
+                        self.cache.put(template.clone());
+                        template
+                    }
+                };
+                let decoded = merge_query(template, parameters);
+                *data = Query::Decoded(decoded);
+            }
+            _ => unimplemented!(),
+        }
+    }
 }
 
 // Split a raw sql query into a template and parameters
 // A query template contains only the operations but no values
 // All parameters are connected as a string by comma
-pub fn split_query(query: &str) -> (String, String) {
+pub fn split_query(query: String) -> (String, Vec<String>) {
     let mut bitmap: Vec<bool> = vec![false; query.len()];
     let mut indice_pairs = Vec::with_capacity(50);
     for re in REGEX_SETS.iter() {
@@ -100,9 +143,8 @@ pub fn split_query(query: &str) -> (String, String) {
     // println!("template: {:?}", template);
     let parameters = indice_pairs
         .iter()
-        .map(|p| p.1)
-        .collect::<Vec<_>>()
-        .join(",");
+        .map(|p| p.1.to_string())
+        .collect();
     // println!("parameters: {:?}", parameters);
 
     (template, parameters)
@@ -110,15 +152,13 @@ pub fn split_query(query: &str) -> (String, String) {
 
 // Merge template string with parameters
 // There should be the exact number of parameters to fill in
-pub fn merge_query(template: &str, parameters: &str) -> String {
+pub fn merge_query(template: String, parameters: Vec<String>) -> String {
     if parameters.is_empty() {
         return template.to_string();
     }
-
-    let parameter_list = parameters.split(',').collect::<Vec<_>>();
-    let num_parameters = parameter_list.len();
-
+    let num_parameters = parameters.len();
     let parts = template.split(SEPARATOR).collect::<Vec<_>>();
+    /*
     assert_eq!(
         parts.len(),
         num_parameters + 1,
@@ -126,13 +166,12 @@ pub fn merge_query(template: &str, parameters: &str) -> String {
         template,
         parameters
     );
-
-    let mut query = String::with_capacity(template.len() + parameters.len());
+    */
+    let mut query = String::with_capacity(template.len() + num_parameters);
     for i in 0..num_parameters {
         query.push_str(parts[i]);
-        query.push_str(parameter_list[i]);
+        query.push_str(&parameters[i]);
     }
     query.push_str(parts[num_parameters]);
-
     query
 }
