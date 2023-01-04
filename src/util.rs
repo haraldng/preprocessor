@@ -1,4 +1,5 @@
 use histogram::Histogram;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::Instant;
@@ -87,4 +88,35 @@ pub enum CachePolicy {
     LFU,
     LRU,
     LECAR,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum MaybeEncoded {
+    Encoded(u8),
+    Decoded(String),
+}
+
+impl MaybeEncoded {
+    pub fn get_size(&self) -> usize {
+        match self {
+            // MaybeEncoded::Encoded(i) => std::mem::size_of_val(i),
+            MaybeEncoded::Encoded(_) => 1,
+            MaybeEncoded::Decoded(s) => s.len(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum MaybeProcessed {
+    Processed(Vec<MaybeEncoded>),
+    NotProcessed(String),
+}
+
+impl MaybeProcessed {
+    pub fn get_size(&self) -> usize {
+        match self {
+            Self::Processed(p) => p.iter().fold(0, |size, x| size + x.get_size()),
+            Self::NotProcessed(s) => s.len(),
+        }
+    }
 }

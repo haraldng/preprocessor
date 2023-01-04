@@ -1,5 +1,6 @@
-use crate::util::{EncodedHeader, MaybeEncoded, RawHeader, Header, MaybeProcessed};
+use crate::util::{EncodedHeader, RawHeader, Header};
 use preprocessor::cache::unicache::{OmniCache, UniCache};
+use preprocessor::util::{MaybeEncoded, MaybeProcessed};
 use std::fmt::{Debug, Formatter};
 
 const MAX_THRESHOLD: usize = 700;

@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 use omnipaxos_core::storage::Entry;
+use preprocessor::util::{MaybeEncoded, MaybeProcessed};
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct RawHeader {
@@ -89,34 +90,3 @@ impl Header {
 }
 
 impl Entry for Header {}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub enum MaybeEncoded {
-    Encoded(u8),
-    Decoded(String),
-}
-
-impl MaybeEncoded {
-    fn get_size(&self) -> usize {
-        match self {
-            // MaybeEncoded::Encoded(i) => std::mem::size_of_val(i),
-            MaybeEncoded::Encoded(_) => 1,
-            MaybeEncoded::Decoded(s) => s.len(),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub enum MaybeProcessed {
-    Processed(Vec<MaybeEncoded>),
-    NotProcessed(String)
-}
-
-impl MaybeProcessed {
-    fn get_size(&self) -> usize {
-        match self {
-            Self::Processed(p) => p.iter().fold(0, |size, x| size + x.get_size()),
-            Self::NotProcessed(s) => s.len(),
-        }
-    }
-}
