@@ -69,22 +69,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "email"
-version = "0.1.0"
-dependencies = [
- "csv",
- "histogram",
- "indexmap",
- "lecar",
- "lfu_cache",
- "lru",
- "preprocessor",
- "serde",
- "strum",
- "strum_macros",
-]
-
-[[package]]
 name = "get-size"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -205,6 +189,15 @@ name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
+
+[[package]]
+name = "omnipaxos_core"
+version = "0.1.0"
+dependencies = [
+ "preprocessor",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "once_cell"
@@ -396,6 +389,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "unicache_email"
+version = "0.1.0"
+dependencies = [
+ "csv",
+ "histogram",
+ "indexmap",
+ "lecar",
+ "lfu_cache",
+ "lru",
+ "omnipaxos_core",
+ "preprocessor",
+ "serde",
+ "strum",
+ "strum_macros",
 ]
 
 [[package]]

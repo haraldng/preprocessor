@@ -1,5 +1,5 @@
 [package]
-name = "email"
+name = "unicache_email"
 version = "0.1.0"
 edition = "2021"
 
@@ -16,6 +16,7 @@ strum_macros = "0.24.3"
 csv = "1.1.6"
 serde = "1.0.152"
 preprocessor = { path = "../.." }
+omnipaxos_core = { path = "../../../omnipaxos/omnipaxos_core", features = ["batch_accept"] }
 
 [profile.release]
 lto = true

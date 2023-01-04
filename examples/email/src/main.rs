@@ -46,7 +46,7 @@ fn main() {
 
         let raw_record: RawHeader = record.unwrap();
         // println!("\n{:?}", raw_record);
-        let raw = Record::Decoded(raw_record);
+        let raw = Header::Decoded(raw_record);
         // println!("size: {}", raw.get_size());
         let raw_size = raw.get_size() as f32;
         for cache_type in CachePolicy::iter() {

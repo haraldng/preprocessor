@@ -1,6 +1,7 @@
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
+use omnipaxos_core::storage::Entry;
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct RawHeader {
     pub message_id: String,
     pub date: String,
@@ -16,7 +17,7 @@ pub struct RawHeader {
     pub x_filename: String,
 }
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct EncodedHeader {
     pub message_id: Vec<MaybeEncoded>,
     pub date: MaybeEncoded,
@@ -32,24 +33,24 @@ pub struct EncodedHeader {
     pub x_filename: MaybeEncoded,
 }
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
-pub enum Record {
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum Header {
     Decoded(RawHeader),
     Encoded(EncodedHeader),
     None,
 }
 
-impl Default for Record {
+impl Default for Header {
     fn default() -> Self {
-        Record::None
+        Header::None
     }
 }
 
-impl Record {
-    pub(crate) fn get_size(&self) -> usize {
+impl Header {
+    pub fn get_size(&self) -> usize {
         let mut size = 0;
         match self {
-            Record::Encoded(e) => {
+            Header::Encoded(e) => {
                 e.message_id.iter().for_each(|x| size += x.get_size());
                 size += e.date.get_size();
                 size += e.from.get_size();
@@ -63,7 +64,7 @@ impl Record {
                 size += e.x_origin.get_size();
                 size += e.x_filename.get_size();
             }
-            Record::Decoded(d) => {
+            Header::Decoded(d) => {
                 size += d.message_id.len();
                 size += d.date.len();
                 size += d.from.len();
@@ -77,7 +78,7 @@ impl Record {
                 size += d.x_origin.len();
                 size += d.x_filename.len();
             }
-            Record::None => {
+            Header::None => {
                 unimplemented!()
             }
         }
@@ -85,7 +86,9 @@ impl Record {
     }
 }
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
+impl Entry for Header {}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum MaybeEncoded {
     Encoded(u8),
     Decoded(String),

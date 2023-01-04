@@ -1,6 +1,6 @@
-use crate::util::{EncodedHeader, MaybeEncoded, Record};
-use crate::RawHeader;
+use crate::util::{EncodedHeader, MaybeEncoded, RawHeader, Header};
 use preprocessor::cache::unicache::{OmniCache, UniCache};
+use std::fmt::{Debug, Formatter};
 
 const THRESHOLD: usize = 3;
 const NUM_MESSAGE_ID_ELEMENTS: usize = 3;
@@ -20,7 +20,7 @@ pub struct EmailUniCache<U: UniCache> {
     date_cache: U,
 }
 
-impl<U: UniCache> OmniCache<Record, U> for EmailUniCache<U> {
+impl<U: UniCache> OmniCache<Header, U> for EmailUniCache<U> {
     fn new(capacity: usize) -> Self {
         Self {
             from_cache: U::new(capacity),
@@ -38,11 +38,11 @@ impl<U: UniCache> OmniCache<Record, U> for EmailUniCache<U> {
         }
     }
 
-    fn encode(&mut self, data: &mut Record) {
+    fn encode(&mut self, data: &mut Header) {
         // split sql into template and parameters
         let rec = std::mem::take(data);
         match rec {
-            Record::Decoded(me) => {
+            Header::Decoded(me) => {
                 let message_id = {
                     let splitted = me.message_id.splitn(NUM_MESSAGE_ID_ELEMENTS, '.');
                     splitted
@@ -83,16 +83,16 @@ impl<U: UniCache> OmniCache<Record, U> for EmailUniCache<U> {
                     x_filename,
                 };
                 // println!("ENCODED: {:?}", encoded);
-                *data = Record::Encoded(encoded);
+                *data = Header::Encoded(encoded);
             }
             _ => unimplemented!(),
         }
     }
 
-    fn decode(&mut self, data: &mut Record) {
+    fn decode(&mut self, data: &mut Header) {
         let rec = std::mem::take(data);
         let decoded = match rec {
-            Record::Encoded(e) => {
+            Header::Encoded(e) => {
                 let message_id = {
                     e.message_id
                         .into_iter()
@@ -136,7 +136,7 @@ impl<U: UniCache> OmniCache<Record, U> for EmailUniCache<U> {
                     x_origin,
                     x_filename,
                 };
-                Record::Decoded(m)
+                Header::Decoded(m)
             }
             _ => unimplemented!(),
         };
@@ -187,5 +187,11 @@ impl<U: UniCache> EmailUniCache<U> {
             .map(|x| Self::try_decode(x, cache))
             .collect::<Vec<String>>()
             .join(join_on)
+    }
+}
+
+impl<U: UniCache> Debug for EmailUniCache<U> {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
+        Result::Ok(())
     }
 }
