@@ -1,8 +1,9 @@
-use crate::util::{EncodedHeader, MaybeEncoded, RawHeader, Header};
+use crate::util::{EncodedHeader, MaybeEncoded, RawHeader, Header, MaybeProcessed};
 use preprocessor::cache::unicache::{OmniCache, UniCache};
 use std::fmt::{Debug, Formatter};
 
-const THRESHOLD: usize = 3;
+const MAX_THRESHOLD: usize = 700;
+const MIN_THRESHOLD: usize = 3;
 const NUM_MESSAGE_ID_ELEMENTS: usize = 3;
 
 pub struct EmailUniCache<U: UniCache> {
@@ -129,7 +130,7 @@ impl<U: UniCache> OmniCache<Header, U> for EmailUniCache<U> {
 impl<U: UniCache> EmailUniCache<U> {
 
     fn try_encode(s: &str, cache: &mut U) -> MaybeEncoded {
-        if s.len() > THRESHOLD {
+        if s.len() > MIN_THRESHOLD {
             match cache.get_encoded_index(s) {
                 Some(i) => MaybeEncoded::Encoded(i),
                 None => {
@@ -143,17 +144,23 @@ impl<U: UniCache> EmailUniCache<U> {
         }
     }
 
-    fn try_encode_vec(s: String, cache: &mut U) -> Vec<MaybeEncoded> {
-        s.split_whitespace()
-            .map(|x| Self::try_encode(x, cache))
-            .collect()
+    fn try_encode_vec(s: String, cache: &mut U) -> MaybeProcessed{
+        if s.len() > MAX_THRESHOLD {
+            MaybeProcessed::NotProcessed(s)
+        } else {
+            let p = s.split_whitespace()
+                .map(|x| Self::try_encode(x, cache))
+                .collect();
+            MaybeProcessed::Processed(p)
+        }
+
     }
 
     fn try_decode(x: MaybeEncoded, cache: &mut U) -> String {
         match x {
             MaybeEncoded::Encoded(i) => cache.get_with_encoded_index(i),
             MaybeEncoded::Decoded(s) => {
-                if s.len() > THRESHOLD {
+                if s.len() > MIN_THRESHOLD {
                     cache.put(s.clone());
                 }
                 s
@@ -162,14 +169,19 @@ impl<U: UniCache> EmailUniCache<U> {
     }
 
     fn try_decode_vec(
-        v: Vec<MaybeEncoded>,
+        v: MaybeProcessed,
         cache: &mut U,
         join_on: &str,
     ) -> String {
-        v.into_iter()
-            .map(|x| Self::try_decode(x, cache))
-            .collect::<Vec<String>>()
-            .join(join_on)
+        match v {
+            MaybeProcessed::Processed(p) => {
+                p.into_iter()
+                    .map(|x| Self::try_decode(x, cache))
+                    .collect::<Vec<String>>()
+                    .join(join_on)
+            },
+            MaybeProcessed::NotProcessed(s) => s
+        }
     }
 }
 

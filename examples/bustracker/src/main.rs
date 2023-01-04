@@ -14,7 +14,7 @@ mod preprocess;
 use crate::preprocess::*;
 
 const CACHE_CAPACITY: usize = u8::MAX as usize;
-const NUM_QUERIES: i64 = 5000000; // -1 to run the whole benchmark
+const NUM_QUERIES: i64 = -1; // -1 to run the whole benchmark
 const FILE: &str = "../../datasets/bustracker/raw_queries.txt";   // change this to run sample or full dataset.
 
 fn main() {

@@ -22,12 +22,12 @@ pub struct EncodedHeader {
     pub message_id: (String, String, MaybeEncoded),
     pub date: MaybeEncoded,
     pub from: MaybeEncoded,
-    pub to: Vec<MaybeEncoded>,
-    pub subject: Vec<MaybeEncoded>,
+    pub to: MaybeProcessed,
+    pub subject: MaybeProcessed,
     pub x_from: MaybeEncoded,
-    pub x_to: Vec<MaybeEncoded>,
-    pub x_cc: Vec<MaybeEncoded>,
-    pub x_bcc: Vec<MaybeEncoded>,
+    pub x_to: MaybeProcessed,
+    pub x_cc: MaybeProcessed,
+    pub x_bcc: MaybeProcessed,
     pub x_folder: MaybeEncoded,
     pub x_origin: MaybeEncoded,
     pub x_filename: MaybeEncoded,
@@ -53,14 +53,15 @@ impl Header {
             Header::Encoded(e) => {
                 let (r1, r2, me) = &e.message_id;
                 size += r1.len() + r2.len() + me.get_size();
+
                 size += e.date.get_size();
                 size += e.from.get_size();
-                e.to.iter().for_each(|x| size += x.get_size());
-                e.subject.iter().for_each(|x| size += x.get_size());
+                size += e.to.get_size();
+                size += e.subject.get_size();
                 size += e.x_from.get_size();
-                e.x_to.iter().for_each(|x| size += x.get_size());
-                e.x_cc.iter().for_each(|x| size += x.get_size());
-                e.x_bcc.iter().for_each(|x| size += x.get_size());
+                size += e.x_to.get_size();
+                size += e.x_cc.get_size();
+                size += e.x_bcc.get_size();
                 size += e.x_folder.get_size();
                 size += e.x_origin.get_size();
                 size += e.x_filename.get_size();
@@ -101,6 +102,21 @@ impl MaybeEncoded {
             // MaybeEncoded::Encoded(i) => std::mem::size_of_val(i),
             MaybeEncoded::Encoded(_) => 1,
             MaybeEncoded::Decoded(s) => s.len(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum MaybeProcessed {
+    Processed(Vec<MaybeEncoded>),
+    NotProcessed(String)
+}
+
+impl MaybeProcessed {
+    fn get_size(&self) -> usize {
+        match self {
+            Self::Processed(p) => p.iter().fold(0, |size, x| size + x.get_size()),
+            Self::NotProcessed(s) => s.len(),
         }
     }
 }
