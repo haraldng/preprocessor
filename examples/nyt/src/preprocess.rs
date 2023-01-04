@@ -1,183 +1,207 @@
-use crate::util::{MaybeEncoded, Record};
-use crate::{EncodedArticle, RawArticle};
+use crate::util::{Article, EncodedArticle, RawArticle};
 use lazy_static::lazy_static;
-use preprocessor::cache::unicache::UniCache;
+use preprocessor::cache::unicache::{OmniCache, UniCache};
 use regex::Regex;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
+use preprocessor::util::{MaybeEncoded, MaybeProcessed};
+use std::fmt::{Formatter, Debug};
 
-pub const URL_DATE: usize = 0;
-pub const URL_PATH: usize = 1;
-pub const URL_NAME: usize = 2;
-pub const PUB_DATE: usize = 3;
-pub const DOCUMENT_TYPE: usize = 4;
-pub const NEWS_DESK: usize = 5;
-pub const SECTION_NAME: usize = 6;
-pub const TYPE_OF_MATERIAL: usize = 7;
-pub const MAIN_HEADLINE: usize = 8;
-pub const PRINT_HEADLINE: usize = 9;
-pub const BY: usize = 10;
-
-pub const NUM_CACHES: usize = BY + 1;
-const THRESHOLD: usize = 3;
+const MAX_THRESHOLD: usize = 40;
+const MIN_THRESHOLD: usize = 3;
 
 const URL_BASE: &str = "https://www.nytimes.com/";
 const DATE_SPLIT: usize = 11;
 const NAME_SEP: &str = "-";
 const PATH_SEP: &str = "/";
 
-pub fn encode<U: UniCache<String>>(
-    record: &mut Record,
-    cache: &mut [U; NUM_CACHES],
-) -> (bool, usize) {
-    // split sql into template and parameters
-    let rec = std::mem::take(record);
-    let raw_size = rec.get_size() as f32;
-    match rec {
-        Record::Decoded(me) => {
-            let web_url = MaybeEncodedURL::try_encode(me.web_url, cache);
-            let pub_date = {
-                let (date, time) = me
-                    .pub_date
-                    .split_once('T')
-                    .unwrap_or_else(|| panic!("No T: {}", me.pub_date));
-                let (time, zone) = time.split_once('+').unwrap();
-                let enc_date = try_encode(date.to_string(), &mut cache[PUB_DATE]);
-                let enc_zone = try_encode(zone.to_string(), &mut cache[PUB_DATE]);
-                (enc_date, time.to_string(), enc_zone)
-            };
-            let document_type = try_encode(me.document_type, &mut cache[DOCUMENT_TYPE]);
-            let news_desk = try_encode(me.news_desk, &mut cache[NEWS_DESK]);
-            let section_name = try_encode(me.section_name, &mut cache[SECTION_NAME]);
-            let type_of_material = try_encode(me.type_of_material, &mut cache[TYPE_OF_MATERIAL]);
-            let main_headline = try_encode_vec(me.main_headline, &mut cache[MAIN_HEADLINE]);
-            let print_headline = try_encode_vec(me.print_headline, &mut cache[PRINT_HEADLINE]);
-            let by = try_encode_vec(me.by, &mut cache[BY]);
-            let encoded = EncodedArticle {
-                web_url,
-                // keywords: me.keywords,
-                pub_date,
-                document_type,
-                news_desk,
-                section_name,
-                type_of_material,
-                main_headline,
-                print_headline,
-                by,
-            };
-            // println!("ENCODED: {:?}", encoded);
-            *record = Record::Encoded(encoded);
-        }
-        _ => unimplemented!(),
-    }
-    let compressed_size = record.get_size() as f32;
-    (
-        false,
-        (100f32 * (1f32 - compressed_size / raw_size)) as usize,
-    )
+pub struct NytUniCache<U: UniCache> {
+    url_date_cache: U,
+    url_path_cache: U,
+    url_name_cache: U,
+    pub_date_cache: U,
+    doc_type_cache: U,
+    news_desk_cache: U,
+    section_cache: U,
+    material_cache: U,
+    main_headline_cache: U,
+    print_headline_cache: U,
+    by_cache: U,
 }
 
-fn try_encode<U: UniCache<String>>(s: String, cache: &mut U) -> MaybeEncoded {
-    if s.len() > THRESHOLD {
-        match cache.get_encoded_index(&s) {
-            Some(i) => MaybeEncoded::Encoded(i),
-            None => {
-                cache.put(s.clone());
-                MaybeEncoded::Decoded(s)
+impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
+    fn new(capacity: usize) -> Self {
+        Self {
+            url_date_cache: U::new(capacity),
+            url_path_cache: U::new(capacity),
+            url_name_cache: U::new(capacity),
+            pub_date_cache: U::new(capacity),
+            doc_type_cache: U::new(capacity),
+            news_desk_cache: U::new(capacity),
+            section_cache: U::new(capacity),
+            material_cache: U::new(capacity),
+            main_headline_cache: U::new(capacity),
+            print_headline_cache: U::new(capacity),
+            by_cache: U::new(capacity)
+        }
+    }
+
+    fn encode(&mut self, data: &mut Article) {
+        let rec = std::mem::take(data);
+        match rec {
+            Article::Decoded(me) => {
+                let web_url = self.try_encode_url(me.web_url);
+                let pub_date = {
+                    let (date, time) = me
+                        .pub_date
+                        .split_once('T')
+                        .unwrap_or_else(|| panic!("No T: {}", me.pub_date));
+                    let (time, zone) = time.split_once('+').unwrap();
+                    let enc_date = Self::try_encode(date, &mut self.pub_date_cache);
+                    let enc_zone = Self::try_encode(zone, &mut self.pub_date_cache);
+                    (enc_date, time.to_string(), enc_zone)
+                };
+                let document_type = Self::try_encode(&me.document_type, &mut self.doc_type_cache);
+                let news_desk = Self::try_encode(&me.news_desk, &mut self.news_desk_cache);
+                let section_name = Self::try_encode(&me.section_name, &mut self.section_cache);
+                let type_of_material = Self::try_encode(&me.type_of_material, &mut self.material_cache);
+                let main_headline = Self::try_encode_vec(me.main_headline, &mut self.main_headline_cache);
+                let print_headline = Self::try_encode_vec(me.print_headline, &mut self.print_headline_cache);
+                let by = Self::try_encode_vec(me.by, &mut self.by_cache);
+                let encoded = EncodedArticle {
+                    web_url,
+                    // keywords: me.keywords,
+                    pub_date,
+                    document_type,
+                    news_desk,
+                    section_name,
+                    type_of_material,
+                    main_headline,
+                    print_headline,
+                    by,
+                };
+                // println!("ENCODED: {:?}", encoded);
+                *data = Article::Encoded(encoded);
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn decode(&mut self, data: &mut Article) {
+        let rec = std::mem::take(data);
+        let decoded = match rec {
+            Article::Encoded(me) => {
+                let web_url = match me.web_url {
+                    MaybeEncodedURL::Encoded(e) => self.decode_url(e),
+                    MaybeEncodedURL::Decoded(s) => s,
+                };
+                let pub_date = {
+                    let (enc_date, time, enc_zone) = me.pub_date;
+                    let date = Self::try_decode(enc_date, &mut self.pub_date_cache);
+                    let zone = Self::try_decode(enc_zone, &mut self.pub_date_cache);
+                    format!("{}T{}+{}", date, time, zone)
+                };
+                let document_type = Self::try_decode(me.document_type, &mut self.doc_type_cache);
+                let news_desk = Self::try_decode(me.news_desk, &mut self.news_desk_cache);
+                let section_name = Self::try_decode(me.section_name, &mut self.section_cache);
+                let type_of_material = Self::try_decode(me.type_of_material, &mut self.material_cache);
+                let main_headline = Self::try_decode_vec(me.main_headline, &mut self.main_headline_cache, " ");
+                let print_headline = Self::try_decode_vec(me.print_headline, &mut self.print_headline_cache, " ");
+                let by = Self::try_decode_vec(me.by, &mut self.by_cache, " ");
+
+                let m = RawArticle {
+                    web_url,
+                    // keywords: me.keywords,
+                    pub_date,
+                    document_type,
+                    news_desk,
+                    section_name,
+                    type_of_material,
+                    main_headline,
+                    print_headline,
+                    by,
+                };
+                Article::Decoded(m)
+            }
+            _ => unimplemented!(),
+        };
+        *data = decoded;
+    }
+}
+
+impl<U: UniCache> NytUniCache<U> {
+
+    fn try_encode(s: &str, cache: &mut U) -> MaybeEncoded {
+        if s.len() > MIN_THRESHOLD {
+            match cache.get_encoded_index(s) {
+                Some(i) => MaybeEncoded::Encoded(i),
+                None => {
+                    let s = s.to_string();
+                    cache.put(s.clone());
+                    MaybeEncoded::Decoded(s)
+                }
+            }
+        } else {
+            MaybeEncoded::Decoded(s.to_string())
+        }
+    }
+
+    fn try_encode_vec(s: String, cache: &mut U) -> MaybeProcessed{
+        if s.len() > MAX_THRESHOLD {
+            MaybeProcessed::NotProcessed(s)
+        } else {
+            let p = s.split_whitespace()
+                .map(|x| Self::try_encode(x, cache))
+                .collect();
+            MaybeProcessed::Processed(p)
+        }
+
+    }
+
+    fn try_encode_vec_with(
+        s: String,
+        cache: &mut U,
+        sep: &str,
+    ) -> MaybeProcessed {
+        if s.len() > MAX_THRESHOLD {
+            MaybeProcessed::NotProcessed(s)
+        } else {
+            let p = s.split(sep)
+                .map(|x| Self::try_encode(x, cache))
+                .collect();
+            MaybeProcessed::Processed(p)
+        }
+
+    }
+
+    fn try_decode(x: MaybeEncoded, cache: &mut U) -> String {
+        match x {
+            MaybeEncoded::Encoded(i) => cache.get_with_encoded_index(i),
+            MaybeEncoded::Decoded(s) => {
+                if s.len() > MIN_THRESHOLD {
+                    cache.put(s.clone());
+                }
+                s
             }
         }
-    } else {
-        MaybeEncoded::Decoded(s)
     }
-}
 
-fn try_encode_vec<U: UniCache<String>>(s: String, cache: &mut U) -> Vec<MaybeEncoded> {
-    s.split_whitespace()
-        .map(|x| try_encode(x.to_string(), cache))
-        .collect()
-}
-
-fn try_encode_vec_with<U: UniCache<String>>(
-    s: String,
-    cache: &mut U,
-    sep: &str,
-) -> Vec<MaybeEncoded> {
-    s.split(sep)
-        .map(|x| try_encode(x.to_string(), cache))
-        .collect()
-}
-
-fn try_decode<U: UniCache<String>>(x: MaybeEncoded, cache: &mut U) -> String {
-    match x {
-        MaybeEncoded::Encoded(i) => cache.get_with_encoded_index(i),
-        MaybeEncoded::Decoded(s) => {
-            if s.len() > THRESHOLD {
-                cache.put(s.clone());
-            }
-            s
+    fn try_decode_vec(
+        v: MaybeProcessed,
+        cache: &mut U,
+        join_on: &str,
+    ) -> String {
+        match v {
+            MaybeProcessed::Processed(p) => {
+                p.into_iter()
+                    .map(|x| Self::try_decode(x, cache))
+                    .collect::<Vec<String>>()
+                    .join(join_on)
+            },
+            MaybeProcessed::NotProcessed(s) => s
         }
     }
-}
 
-fn try_decode_vec<U: UniCache<String>>(
-    v: Vec<MaybeEncoded>,
-    cache: &mut U,
-    join_on: &str,
-) -> String {
-    v.into_iter()
-        .map(|x| try_decode(x, cache))
-        .collect::<Vec<String>>()
-        .join(join_on)
-}
-
-pub fn decode<U: UniCache<String>>(record: &mut Record, cache: &mut [U; NUM_CACHES]) {
-    let rec = std::mem::take(record);
-    let decoded = match rec {
-        Record::Encoded(me) => {
-            let web_url = match me.web_url {
-                MaybeEncodedURL::Encoded(e) => decode_url(e, cache),
-                MaybeEncodedURL::Decoded(s) => s,
-            };
-            let pub_date = {
-                let (enc_date, time, enc_zone) = me.pub_date;
-                let date = try_decode(enc_date, &mut cache[PUB_DATE]);
-                let zone = try_decode(enc_zone, &mut cache[PUB_DATE]);
-                format!("{}T{}+{}", date, time, zone)
-            };
-            let document_type = try_decode(me.document_type, &mut cache[DOCUMENT_TYPE]);
-            let news_desk = try_decode(me.news_desk, &mut cache[NEWS_DESK]);
-            let section_name = try_decode(me.section_name, &mut cache[SECTION_NAME]);
-            let type_of_material = try_decode(me.type_of_material, &mut cache[TYPE_OF_MATERIAL]);
-            let main_headline = try_decode_vec(me.main_headline, &mut cache[MAIN_HEADLINE], " ");
-            let print_headline = try_decode_vec(me.print_headline, &mut cache[PRINT_HEADLINE], " ");
-            let by = try_decode_vec(me.by, &mut cache[BY], " ");
-
-            let m = RawArticle {
-                web_url,
-                // keywords: me.keywords,
-                pub_date,
-                document_type,
-                news_desk,
-                section_name,
-                type_of_material,
-                main_headline,
-                print_headline,
-                by,
-            };
-            Record::Decoded(m)
-        }
-        _ => unimplemented!(),
-    };
-    *record = decoded;
-}
-
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
-pub enum MaybeEncodedURL {
-    Encoded(EncodedURL),
-    Decoded(String),
-}
-
-impl MaybeEncodedURL {
-    fn try_encode<U: UniCache<String>>(s: String, cache: &mut [U; NUM_CACHES]) -> Self {
+    fn try_encode_url(&mut self, s: String) -> MaybeEncodedURL {
         match s.strip_prefix(URL_BASE) {
             Some(rest) => {
                 lazy_static! {
@@ -185,28 +209,28 @@ impl MaybeEncodedURL {
                 }
                 if RE.is_match(rest) {
                     let (date, path_name) = rest.split_at(DATE_SPLIT);
-                    let enc_date = try_encode(date.to_string(), &mut cache[URL_DATE]);
+                    let enc_date = Self::try_encode(date, &mut self.url_date_cache);
                     let (enc_path, enc_name) = match path_name.rsplit_once('/') {
                         Some((path, name)) => {
-                            let enc_path = try_encode_vec_with(
+                            let enc_path = Self::try_encode_vec_with(
                                 path.to_string(),
-                                &mut cache[URL_PATH],
+                                &mut self.url_path_cache,
                                 PATH_SEP,
                             );
-                            let enc_name = try_encode_vec_with(
+                            let enc_name = Self::try_encode_vec_with(
                                 name.to_string(),
-                                &mut cache[URL_NAME],
+                                &mut self.url_name_cache,
                                 NAME_SEP,
                             );
-                            (enc_path, enc_name)
+                            (Some(enc_path), enc_name)
                         }
                         None => {
-                            let enc_name = try_encode_vec_with(
+                            let enc_name = Self::try_encode_vec_with(
                                 path_name.to_string(),
-                                &mut cache[URL_NAME],
+                                &mut self.url_name_cache,
                                 NAME_SEP,
                             );
-                            (vec![], enc_name)
+                            (None, enc_name)
                         }
                     };
 
@@ -215,22 +239,47 @@ impl MaybeEncodedURL {
                         path: enc_path,
                         name: enc_name,
                     };
-                    Self::Encoded(e)
+                    MaybeEncodedURL::Encoded(e)
                 } else {
-                    Self::Decoded(s)
+                    MaybeEncodedURL::Decoded(s)
                 }
             }
-            None => Self::Decoded(s),
+            None => MaybeEncodedURL::Decoded(s),
         }
     }
+
+    fn decode_url(&mut self, enc_url: EncodedURL) -> String {
+        let year = Self::try_decode(enc_url.date, &mut self.url_date_cache);
+        let name = Self::try_decode_vec(enc_url.name, &mut self.url_name_cache, NAME_SEP);
+        match enc_url.path {
+            Some(mp) => {
+                let path = Self::try_decode_vec(mp, &mut self.url_path_cache, PATH_SEP);
+                format!("{}{}{}/{}", URL_BASE, year, path, name)
+            },
+            None => format!("{}{}{}", URL_BASE, year, name),
+        }
+        // format!("https://www.nytimes.com/2019/12/31/us/texas-church-shooting-white-settlement.html")
+    }
+
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum MaybeEncodedURL {
+    Encoded(EncodedURL),
+    Decoded(String),
+}
+
+impl MaybeEncodedURL {
 
     pub(crate) fn get_size(&self) -> usize {
         match self {
             MaybeEncodedURL::Encoded(e) => {
                 let mut size = 0;
                 size += e.date.get_size();
-                e.path.iter().for_each(|x| size += x.get_size());
-                e.name.iter().for_each(|x| size += x.get_size());
+                size += e.name.get_size();
+                if let Some(mp) = e.path.as_ref() {
+                    size += mp.get_size();
+                }
                 size
             }
             MaybeEncodedURL::Decoded(s) => s.len(),
@@ -238,23 +287,17 @@ impl MaybeEncodedURL {
     }
 }
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct EncodedURL {
     date: MaybeEncoded,
-    path: Vec<MaybeEncoded>,
-    name: Vec<MaybeEncoded>,
+    path: Option<MaybeProcessed>,
+    name: MaybeProcessed,
 }
 
-fn decode_url<U: UniCache<String>>(enc_url: EncodedURL, cache: &mut [U; NUM_CACHES]) -> String {
-    let year = try_decode(enc_url.date, &mut cache[URL_DATE]);
-    let name = try_decode_vec(enc_url.name, &mut cache[URL_NAME], NAME_SEP);
-    if !enc_url.path.is_empty() {
-        let path = try_decode_vec(enc_url.path, &mut cache[URL_PATH], PATH_SEP);
-        format!("{}{}{}/{}", URL_BASE, year, path, name)
-    } else {
-        format!("{}{}{}", URL_BASE, year, name)
+impl<U: UniCache> Debug for NytUniCache<U> {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
+        Result::Ok(())
     }
-    // format!("https://www.nytimes.com/2019/12/31/us/texas-church-shooting-white-settlement.html")
 }
 
 #[test]

@@ -191,21 +191,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
-name = "nyt"
+name = "omnipaxos_core"
 version = "0.1.0"
 dependencies = [
- "csv",
- "histogram",
- "indexmap",
- "lazy_static",
- "lecar",
- "lfu_cache",
- "lru",
  "preprocessor",
- "regex",
  "serde",
- "strum",
- "strum_macros",
+ "serde_json",
 ]
 
 [[package]]
@@ -398,6 +389,25 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "unicache_nyt"
+version = "0.1.0"
+dependencies = [
+ "csv",
+ "histogram",
+ "indexmap",
+ "lazy_static",
+ "lecar",
+ "lfu_cache",
+ "lru",
+ "omnipaxos_core",
+ "preprocessor",
+ "regex",
+ "serde",
+ "strum",
+ "strum_macros",
 ]
 
 [[package]]

@@ -1,8 +1,9 @@
+use omnipaxos_core::storage::Entry;
 use crate::preprocess::MaybeEncodedURL;
-use lecar::cache::Cache;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
+use preprocessor::util::{MaybeEncoded, MaybeProcessed};
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct RawArticle {
     pub web_url: String,
     // pub keywords: String,
@@ -16,7 +17,7 @@ pub struct RawArticle {
     pub by: String,
 }
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct EncodedArticle {
     pub(crate) web_url: MaybeEncodedURL,
     // pub(crate) keywords: String,
@@ -25,23 +26,23 @@ pub struct EncodedArticle {
     pub(crate) news_desk: MaybeEncoded,
     pub(crate) section_name: MaybeEncoded,
     pub(crate) type_of_material: MaybeEncoded,
-    pub(crate) main_headline: Vec<MaybeEncoded>,
-    pub(crate) print_headline: Vec<MaybeEncoded>,
-    pub(crate) by: Vec<MaybeEncoded>,
+    pub(crate) main_headline: MaybeProcessed,
+    pub(crate) print_headline: MaybeProcessed,
+    pub(crate) by: MaybeProcessed,
 }
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
-pub enum Record {
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum Article {
     Decoded(RawArticle),
     Encoded(EncodedArticle),
     None,
 }
 
-impl Record {
+impl Article {
     pub(crate) fn get_size(&self) -> usize {
         let mut size = 0;
         match self {
-            Record::Encoded(e) => {
+            Article::Encoded(e) => {
                 size += e.web_url.get_size();
                 size += e.pub_date.0.get_size();
                 size += e.pub_date.1.len();
@@ -50,11 +51,11 @@ impl Record {
                 size += e.news_desk.get_size();
                 size += e.section_name.get_size();
                 size += e.type_of_material.get_size();
-                e.main_headline.iter().for_each(|x| size += x.get_size());
-                e.print_headline.iter().for_each(|x| size += x.get_size());
-                e.by.iter().for_each(|x| size += x.get_size());
+                size += e.main_headline.get_size();
+                size += e.print_headline.get_size();
+                size += e.by.get_size();
             }
-            Record::Decoded(d) => {
+            Article::Decoded(d) => {
                 size += d.web_url.len();
                 // size += d.keywords.len();
                 size += d.pub_date.len();
@@ -66,7 +67,7 @@ impl Record {
                 size += d.print_headline.len();
                 size += d.by.len();
             }
-            Record::None => {
+            Article::None => {
                 unimplemented!()
             }
         }
@@ -74,24 +75,10 @@ impl Record {
     }
 }
 
-impl Default for Record {
+impl Default for Article {
     fn default() -> Self {
-        Record::None
+        Article::None
     }
 }
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
-pub enum MaybeEncoded {
-    Encoded(usize),
-    Decoded(String),
-}
-
-impl MaybeEncoded {
-    pub(crate) fn get_size(&self) -> usize {
-        match self {
-            // MaybeEncoded::Encoded(i) => std::mem::size_of_val(i),
-            MaybeEncoded::Encoded(_) => 1,
-            MaybeEncoded::Decoded(s) => s.len(),
-        }
-    }
-}
+impl Entry for Article {}
