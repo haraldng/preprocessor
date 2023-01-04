@@ -14,6 +14,10 @@ const DATE_SPLIT: usize = 11;
 const NAME_SEP: &str = "-";
 const PATH_SEP: &str = "/";
 
+lazy_static! {
+    static ref RE: Regex = Regex::new(r"^\d{4}/\d{2}/\d{2}/").unwrap();
+}
+
 pub struct NytUniCache<U: UniCache> {
     url_date_cache: U,
     url_path_cache: U,
@@ -49,7 +53,7 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
         let rec = std::mem::take(data);
         match rec {
             Article::Decoded(me) => {
-                let web_url = self.try_encode_url(me.web_url);
+                let web_url = Self::try_encode_url(me.web_url, &mut self.url_date_cache, &mut self.url_path_cache, &mut self.url_name_cache);
                 let pub_date = {
                     let (date, time) = me
                         .pub_date
@@ -91,7 +95,7 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
         let decoded = match rec {
             Article::Encoded(me) => {
                 let web_url = match me.web_url {
-                    MaybeEncodedURL::Encoded(e) => self.decode_url(e),
+                    MaybeEncodedURL::Encoded(e) => Self::decode_url(e, &mut self.url_date_cache, &mut self.url_path_cache, &mut self.url_name_cache),
                     MaybeEncodedURL::Decoded(s) => s,
                 };
                 let pub_date = {
@@ -201,25 +205,22 @@ impl<U: UniCache> NytUniCache<U> {
         }
     }
 
-    fn try_encode_url(&mut self, s: String) -> MaybeEncodedURL {
+    fn try_encode_url(s: String, url_date_cache: &mut U, url_path_cache: &mut U, url_name_cache: &mut U) -> MaybeEncodedURL {
         match s.strip_prefix(URL_BASE) {
             Some(rest) => {
-                lazy_static! {
-                    static ref RE: Regex = Regex::new(r"^\d{4}/\d{2}/\d{2}/").unwrap();
-                }
                 if RE.is_match(rest) {
                     let (date, path_name) = rest.split_at(DATE_SPLIT);
-                    let enc_date = Self::try_encode(date, &mut self.url_date_cache);
+                    let enc_date = Self::try_encode(date, url_date_cache);
                     let (enc_path, enc_name) = match path_name.rsplit_once('/') {
                         Some((path, name)) => {
                             let enc_path = Self::try_encode_vec_with(
                                 path.to_string(),
-                                &mut self.url_path_cache,
+                                url_path_cache,
                                 PATH_SEP,
                             );
                             let enc_name = Self::try_encode_vec_with(
                                 name.to_string(),
-                                &mut self.url_name_cache,
+                                url_name_cache,
                                 NAME_SEP,
                             );
                             (Some(enc_path), enc_name)
@@ -227,7 +228,7 @@ impl<U: UniCache> NytUniCache<U> {
                         None => {
                             let enc_name = Self::try_encode_vec_with(
                                 path_name.to_string(),
-                                &mut self.url_name_cache,
+                                url_name_cache,
                                 NAME_SEP,
                             );
                             (None, enc_name)
@@ -248,12 +249,12 @@ impl<U: UniCache> NytUniCache<U> {
         }
     }
 
-    fn decode_url(&mut self, enc_url: EncodedURL) -> String {
-        let year = Self::try_decode(enc_url.date, &mut self.url_date_cache);
-        let name = Self::try_decode_vec(enc_url.name, &mut self.url_name_cache, NAME_SEP);
+    fn decode_url(enc_url: EncodedURL, url_date_cache: &mut U, url_path_cache: &mut U, url_name_cache: &mut U) -> String {
+        let year = Self::try_decode(enc_url.date, url_date_cache);
+        let name = Self::try_decode_vec(enc_url.name, url_name_cache, NAME_SEP);
         match enc_url.path {
             Some(mp) => {
-                let path = Self::try_decode_vec(mp, &mut self.url_path_cache, PATH_SEP);
+                let path = Self::try_decode_vec(mp, url_path_cache, PATH_SEP);
                 format!("{}{}{}/{}", URL_BASE, year, path, name)
             },
             None => format!("{}{}{}", URL_BASE, year, name),
