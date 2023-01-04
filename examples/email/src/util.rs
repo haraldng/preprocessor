@@ -19,7 +19,7 @@ pub struct RawHeader {
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct EncodedHeader {
-    pub message_id: Vec<MaybeEncoded>,
+    pub message_id: (String, String, MaybeEncoded),
     pub date: MaybeEncoded,
     pub from: MaybeEncoded,
     pub to: Vec<MaybeEncoded>,
@@ -51,7 +51,8 @@ impl Header {
         let mut size = 0;
         match self {
             Header::Encoded(e) => {
-                e.message_id.iter().for_each(|x| size += x.get_size());
+                let (r1, r2, me) = &e.message_id;
+                size += r1.len() + r2.len() + me.get_size();
                 size += e.date.get_size();
                 size += e.from.get_size();
                 e.to.iter().for_each(|x| size += x.get_size());

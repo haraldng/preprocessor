@@ -44,30 +44,24 @@ impl<U: UniCache> OmniCache<Header, U> for EmailUniCache<U> {
         match rec {
             Header::Decoded(me) => {
                 let message_id = {
-                    let splitted = me.message_id.splitn(NUM_MESSAGE_ID_ELEMENTS, '.');
-                    splitted
-                        .enumerate()
-                        .map(|(i, x)| {
-                            let x = x.to_string();
-                            if i == NUM_MESSAGE_ID_ELEMENTS - 1 {
-                                Self::try_encode(x, &mut self.message_id_cache)
-                            } else {
-                                MaybeEncoded::Decoded(x)
-                            }
-                        })
-                        .collect()
+                    let mut splitted = me.message_id.splitn(NUM_MESSAGE_ID_ELEMENTS, '.');
+                    let r1 = splitted.next().unwrap();
+                    let r2 = splitted.next().unwrap();
+                    let me = splitted.next().unwrap();
+                    let e = Self::try_encode(me, &mut self.message_id_cache);
+                    (r1.to_string(), r2.to_string(), e)
                 };
-                let date = Self::try_encode(me.date, &mut self.date_cache);
-                let from = Self::try_encode(me.from, &mut self.from_cache);
+                let date = Self::try_encode(&me.date, &mut self.date_cache);
+                let from = Self::try_encode(&me.from, &mut self.from_cache);
                 let to = Self::try_encode_vec(me.to, &mut self.to_cache);
                 let subject = Self::try_encode_vec(me.subject, &mut self.subject_cache);
-                let x_from = Self::try_encode(me.x_from, &mut self.x_from_cache);
+                let x_from = Self::try_encode(&me.x_from, &mut self.x_from_cache);
                 let x_to = Self::try_encode_vec(me.x_to, &mut self.x_to_cache);
                 let x_cc = Self::try_encode_vec(me.x_cc, &mut self.x_cc_cache);
                 let x_bcc = Self::try_encode_vec(me.x_bcc, &mut self.x_bcc_cache);
-                let x_folder = Self::try_encode(me.x_folder, &mut self.x_folder_cache);
-                let x_origin = Self::try_encode(me.x_origin, &mut self.x_origin_cache);
-                let x_filename = Self::try_encode(me.x_filename, &mut self.x_filename_cache);
+                let x_folder = Self::try_encode(&me.x_folder, &mut self.x_folder_cache);
+                let x_origin = Self::try_encode(&me.x_origin, &mut self.x_origin_cache);
+                let x_filename = Self::try_encode(&me.x_filename, &mut self.x_filename_cache);
                 let encoded = EncodedHeader {
                     message_id,
                     date,
@@ -94,21 +88,9 @@ impl<U: UniCache> OmniCache<Header, U> for EmailUniCache<U> {
         let decoded = match rec {
             Header::Encoded(e) => {
                 let message_id = {
-                    e.message_id
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, x)| {
-                            if i == NUM_MESSAGE_ID_ELEMENTS - 1 {
-                                Self::try_decode(x, &mut self.message_id_cache)
-                            } else {
-                                match x {
-                                    MaybeEncoded::Decoded(d) => d,
-                                    _ => unimplemented!(),
-                                }
-                            }
-                        })
-                        .collect::<Vec<String>>()
-                        .join(".")
+                    let (r1, r2, me) = e.message_id;
+                    let decoded = Self::try_decode(me, &mut self.message_id_cache);
+                    [r1, r2, decoded].join(".")
                 };
                 let date = Self::try_decode(e.date, &mut self.date_cache);
                 let from = Self::try_decode(e.from, &mut self.from_cache);
@@ -146,23 +128,24 @@ impl<U: UniCache> OmniCache<Header, U> for EmailUniCache<U> {
 
 impl<U: UniCache> EmailUniCache<U> {
 
-    fn try_encode(s: String, cache: &mut U) -> MaybeEncoded {
+    fn try_encode(s: &str, cache: &mut U) -> MaybeEncoded {
         if s.len() > THRESHOLD {
-            match cache.get_encoded_index(&s) {
+            match cache.get_encoded_index(s) {
                 Some(i) => MaybeEncoded::Encoded(i),
                 None => {
+                    let s = s.to_string();
                     cache.put(s.clone());
                     MaybeEncoded::Decoded(s)
                 }
             }
         } else {
-            MaybeEncoded::Decoded(s)
+            MaybeEncoded::Decoded(s.to_string())
         }
     }
 
     fn try_encode_vec(s: String, cache: &mut U) -> Vec<MaybeEncoded> {
         s.split_whitespace()
-            .map(|x| Self::try_encode(x.into(), cache))
+            .map(|x| Self::try_encode(x, cache))
             .collect()
     }
 
