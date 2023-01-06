@@ -8,6 +8,7 @@ use preprocessor::util::*;
 use std::fs::File;
 use std::time::Instant;
 use strum::IntoEnumIterator;
+use preprocessor::cache::lfu_cache::LfuUniCache;
 
 mod preprocess;
 mod util;
@@ -27,15 +28,10 @@ fn main() {
     let mut lru_decoder: EmailUniCache<LruUniCache> = EmailUniCache::new(CACHE_CAPACITY);
     let mut lru_res = Results::new(CachePolicy::LRU);
 
-    /*
-        let mut lfu_caches = [false; NUM_CACHES].map(|_| LfuUniCache::new(CACHE_CAPACITY));
-        let mut lfu_decoders = [false; NUM_CACHES].map(|_| LfuUniCache::new(CACHE_CAPACITY));
-        let mut lfu_res = Results::new(CachePolicy::LFU);
+    let mut lfu_cache: EmailUniCache<LfuUniCache> = EmailUniCache::new(CACHE_CAPACITY);
+    let mut lfu_decoder: EmailUniCache<LfuUniCache> = EmailUniCache::new(CACHE_CAPACITY);
+    let mut lfu_res = Results::new(CachePolicy::LFU);
 
-        let mut lecar_caches = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
-        let mut lecar_decoders = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
-        let mut lecar_res = Results::new(CachePolicy::LECAR);
-    */
     let file = File::open(FILE).unwrap();
     let mut reader = csv::Reader::from_reader(file);
 
@@ -53,18 +49,15 @@ fn main() {
             let mut processed = raw.clone();
             match cache_type {
                 CachePolicy::LFU => {
-                    /*
                     let start = Instant::now();
-                    let (hit, compression_rate) = encode(&mut processed, &mut lfu_caches);
+                    lfu_cache.encode(&mut processed);
                     let encode_end = Instant::now();
-                    // println!("Compressed size: {}", compressed_command.get_size());
-                    decode(&mut processed, &mut lfu_decoders);
+                    // println!("Compressed rate: {}, size: {}, {:?}", compression_rate, processed.get_size(), processed);
+                    let processed_size = processed.get_size() as f32;
+                    lfu_decoder.decode(&mut processed);
                     let end = Instant::now();
-                    let processed_size = processed.get_size();
-                    let compression_rate = 1f32 - processed_size as f32 / raw_size as f32;
-                    lfu_res.update(start, encode_end, end, hit, compression_rate);
-
-                     */
+                    let compression_rate = 100f32 * (1f32 - processed_size / raw_size);
+                    lfu_res.update(start, encode_end, end, false, compression_rate as usize);
                 }
                 CachePolicy::LRU => {
                     let start = Instant::now();
@@ -118,7 +111,7 @@ fn main() {
     for cache_type in CachePolicy::iter() {
         match cache_type {
             CachePolicy::LFU => {
-                // println!("{}", lfu_res)
+                println!("{}", lfu_res)
             },
             CachePolicy::LRU => println!("{}", lru_res),
             CachePolicy::LECAR => {

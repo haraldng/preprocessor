@@ -1,45 +1,74 @@
-// use crate::cache::unicache::UniCache;
-// use indexmap::IndexMap;
-// use lfu_cache::LfuCache;
-// use std::fmt::Debug;
-// use std::hash::Hash;
-// use std::marker::PhantomData;
-//
-// pub struct LfuUniCache<T: Clone + Debug + Hash + Eq> {
-//     lfu_cache: LfuCache<T, PhantomData<bool>>,
-//     index_cache: IndexMap<T, PhantomData<bool>>,
-// }
-//
-// impl<T: Clone + Debug + Hash + Eq> UniCache<T> for LfuUniCache<T> {
-//     fn new(capacity: usize) -> Self {
-//         Self {
-//             lfu_cache: LfuCache::with_capacity(capacity),
-//             index_cache: IndexMap::with_capacity(capacity),
-//         }
-//     }
-//
-//     fn put(&mut self, item: T) {
-//         let _maybe_evicted = self.lfu_cache.insert(item.clone(), PhantomData);
-//         // TODO remove maybe_evicted item from index_cache
-//         self.index_cache.insert(item, PhantomData);
-//     }
-//
-//     fn get_encoded_index(&mut self, item: &T) -> Option<usize> {
-//         if self.lfu_cache.get(item).is_some() {
-//             self.index_cache.get_index_of(item)
-//         } else {
-//             None
-//         }
-//     }
-//
-//     fn get_with_encoded_index(&mut self, index: usize) -> T {
-//         let item = self.index_cache.get_index(index).unwrap().0.clone();
-//         self.lfu_cache.get(&item).unwrap_or_else(|| {
-//             panic!(
-//                 "Tried to update frequency of cache item that doesn't exist: {:?}",
-//                 &item
-//             )
-//         });
-//         item
-//     }
-// }
+use crate::cache::unicache::UniCache;
+use lfu_cache::LfuCache;
+
+enum Role {
+    Encoder,
+    Decoder,
+}
+
+pub struct LfuUniCache {
+    index: u8,
+    role: Role,
+    encoder_cache: LfuCache<String, u8>,
+    decoder_cache: LfuCache<u8, String>,
+}
+
+impl UniCache for LfuUniCache {
+    fn new(capacity: usize) -> Self {
+        Self {
+            index: 0,
+            encoder_cache: LfuCache::with_capacity(0),
+            decoder_cache: LfuCache::with_capacity(capacity),
+            role: Role::Decoder,
+        }
+    }
+
+    fn put(&mut self, item: String) {
+        if self.index == u8::MAX {
+            match self.role {
+                Role::Encoder => {
+                    let (_, evicted_index) = self.encoder_cache.pop_lfu_key_value().unwrap();
+                    let _evicted_after_insert = self.encoder_cache.insert(item, evicted_index);
+                    // assert!(evicted_after_insert.is_none());
+                }
+                Role::Decoder => {
+                    let (evicted_index, _) = self.decoder_cache.pop_lfu_key_value().unwrap();
+                    let _evicted_after_insert = self.decoder_cache.insert(evicted_index, item);
+                    // assert!(evicted_after_insert.is_none());
+                }
+            };
+        } else {
+            match self.role {
+                Role::Encoder => {
+                    let _ = self.encoder_cache.insert(item, self.index);
+                }
+                Role::Decoder => {
+                    let _ = self.decoder_cache.insert(self.index, item);
+                }
+            };
+            self.index += 1;
+        }
+    }
+
+    fn get_encoded_index(&mut self, item: &str) -> Option<u8> {
+        match self.role {
+            Role::Encoder => self.encoder_cache.get(&item.to_string()).copied(),
+            Role::Decoder => {
+                // assert!(self.decoder_cache.is_empty());
+                let capacity = self.decoder_cache.capacity().unwrap();
+                self.encoder_cache = LfuCache::with_capacity(capacity.into());
+                self.role = Role::Encoder;
+                None
+            }
+        }
+    }
+
+    fn get_with_encoded_index(&mut self, index: u8) -> String {
+        match self.role {
+            Role::Encoder => {
+                unimplemented!()
+            }
+            Role::Decoder => self.decoder_cache.get(&index).unwrap().clone(),
+        }
+    }
+}

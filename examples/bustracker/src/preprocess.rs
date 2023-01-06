@@ -37,7 +37,7 @@ impl Default for Query {
 impl Entry for Query {}
 
 impl Query {
-    pub(crate) fn get_size(&self) -> usize {
+    pub fn get_size(&self) -> usize {
         let mut size = 0;
         match self {
             Query::Encoded(t, params) => {

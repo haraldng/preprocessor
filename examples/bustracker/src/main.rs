@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
 use histogram::Histogram;
-// use preprocessor::cache::lfu_cache::LfuUniCache;
+use preprocessor::cache::lfu_cache::LfuUniCache;
 use preprocessor::cache::lru_cache::LruUniCache;
 // use preprocessor::cache::lecar_cache::LecarUniCache;
 use preprocessor::cache::unicache::{OmniCache};
@@ -25,6 +25,10 @@ fn main() {
     let mut lru_decoder: BustrackerUniCache<LruUniCache> = BustrackerUniCache::new(CACHE_CAPACITY);
     let mut lru_res = Results::new(CachePolicy::LRU);
 
+    let mut lfu_cache: BustrackerUniCache<LfuUniCache> = BustrackerUniCache::new(CACHE_CAPACITY);
+    let mut lfu_decoder: BustrackerUniCache<LfuUniCache> = BustrackerUniCache::new(CACHE_CAPACITY);
+    let mut lfu_res = Results::new(CachePolicy::LFU);
+
     let file = File::open(FILE).unwrap();
     let reader = BufReader::new(file);
     for (idx, line) in reader.lines().enumerate() {
@@ -37,14 +41,15 @@ fn main() {
             let mut processed = raw.clone();
             match cache_type {
                 CachePolicy::LFU => {
-                    /*
                     let start = Instant::now();
-                    let (hit, compression_rate) = encode(&mut raw_command, &mut lfu_cache);
+                    lfu_cache.encode(&mut processed);
                     let encode_end = Instant::now();
-                    decode(&mut raw_command, &mut lfu_cache);
+                    // println!("Compressed rate: {}, size: {}, {:?}", compression_rate, processed.get_size(), processed);
+                    let processed_size = processed.get_size() as f32;
+                    lfu_decoder.decode(&mut processed);
                     let end = Instant::now();
-                    lfu_res.update(start, encode_end, end, hit, compression_rate);
-                    */
+                    let compression_rate = 100f32 * (1f32 - processed_size / raw_size);
+                    lfu_res.update(start, encode_end, end, false, compression_rate as usize);
                 }
                 CachePolicy::LRU => {
                     let start = Instant::now();
@@ -92,7 +97,7 @@ fn main() {
     for cache_type in CachePolicy::iter() {
         match cache_type {
             CachePolicy::LFU => {
-                // println!("{}", lfu_res)
+                println!("{}", lfu_res)
             },
             CachePolicy::LRU => println!("{}", lru_res),
             CachePolicy::LECAR => {

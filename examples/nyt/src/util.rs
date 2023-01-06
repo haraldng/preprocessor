@@ -39,7 +39,7 @@ pub enum Article {
 }
 
 impl Article {
-    pub(crate) fn get_size(&self) -> usize {
+    pub fn get_size(&self) -> usize {
         let mut size = 0;
         match self {
             Article::Encoded(e) => {
