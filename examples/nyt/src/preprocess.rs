@@ -28,7 +28,7 @@ pub struct NytUniCache<U: UniCache> {
     section_cache: U,
     material_cache: U,
     headline_cache: U,
-    by_cache: U,
+    // by_cache: U,
 }
 
 impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
@@ -43,7 +43,7 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
             section_cache: U::new(capacity),
             material_cache: U::new(capacity),
             headline_cache: U::new(capacity),
-            by_cache: U::new(capacity)
+            // by_cache: U::new(capacity)
         }
     }
 
@@ -66,9 +66,14 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
                 let news_desk = Self::try_encode(&me.news_desk, &mut self.news_desk_cache);
                 let section_name = Self::try_encode(&me.section_name, &mut self.section_cache);
                 let type_of_material = Self::try_encode(&me.type_of_material, &mut self.material_cache);
+                let same_headline = me.main_headline == me.print_headline;
                 let main_headline = Self::try_encode_vec(me.main_headline, &mut self.headline_cache);
-                let print_headline = Self::try_encode_vec(me.print_headline, &mut self.headline_cache);
-                let by = Self::try_encode_vec(me.by, &mut self.by_cache);
+                let print_headline = if same_headline {
+                    None
+                } else {
+                    Some(Self::try_encode_vec(me.print_headline, &mut self.headline_cache))
+                };
+                // let by = Self::try_encode_vec(me.by, &mut self.by_cache);
                 let encoded = EncodedArticle {
                     web_url,
                     // keywords: me.keywords,
@@ -79,7 +84,7 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
                     type_of_material,
                     main_headline,
                     print_headline,
-                    by,
+                    by: me.by,
                 };
                 // println!("ENCODED: {:?}", encoded);
                 *data = Article::Encoded(encoded);
@@ -107,8 +112,13 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
                 let section_name = Self::try_decode(me.section_name, &mut self.section_cache);
                 let type_of_material = Self::try_decode(me.type_of_material, &mut self.material_cache);
                 let main_headline = Self::try_decode_vec(me.main_headline, &mut self.headline_cache, " ");
-                let print_headline = Self::try_decode_vec(me.print_headline, &mut self.headline_cache, " ");
-                let by = Self::try_decode_vec(me.by, &mut self.by_cache, " ");
+                let print_headline = match me.print_headline {
+                    Some(e) => {
+                        Self::try_decode_vec(e, &mut self.headline_cache, " ")
+                    },
+                    None => main_headline.clone(),
+                };
+                // let by = Self::try_decode_vec(me.by, &mut self.by_cache, " ");
 
                 let m = RawArticle {
                     web_url,
@@ -120,7 +130,7 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
                     type_of_material,
                     main_headline,
                     print_headline,
-                    by,
+                    by: me.by,
                 };
                 Article::Decoded(m)
             }

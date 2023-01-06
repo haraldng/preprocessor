@@ -39,12 +39,14 @@ fn main() {
     let file = File::open(FILE).unwrap();
     let mut reader = csv::Reader::from_reader(file);
 
+    let mut counter = 0;
     for (idx, record) in reader.deserialize().enumerate() {
         if idx as i64 == NUM_QUERIES {
             break;
         }
 
         let raw_record: RawArticle = record.unwrap();
+        if raw_record.print_headline == raw_record.main_headline { counter += 1; }
         // println!("\n{:?}", raw_record);
         let raw = Article::Decoded(raw_record);
         // println!("size: {}", raw.get_size());
@@ -111,7 +113,7 @@ fn main() {
         query_len_histo.maximum().unwrap(),
         query_len_histo.stddev().unwrap(),
     );
-
+    println!("Counter: {}", counter);
     for cache_type in CachePolicy::iter() {
         match cache_type {
             CachePolicy::LFU => {

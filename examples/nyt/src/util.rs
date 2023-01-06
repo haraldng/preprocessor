@@ -27,8 +27,8 @@ pub struct EncodedArticle {
     pub(crate) section_name: MaybeEncoded,
     pub(crate) type_of_material: MaybeEncoded,
     pub(crate) main_headline: MaybeProcessed,
-    pub(crate) print_headline: MaybeProcessed,
-    pub(crate) by: MaybeProcessed,
+    pub(crate) print_headline: Option<MaybeProcessed>,
+    pub(crate) by: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -52,8 +52,11 @@ impl Article {
                 size += e.section_name.get_size();
                 size += e.type_of_material.get_size();
                 size += e.main_headline.get_size();
-                size += e.print_headline.get_size();
-                size += e.by.get_size();
+                size += match &e.print_headline {
+                    Some(p) => p.get_size(),
+                    None => 0,
+                };
+                size += e.by.len();
             }
             Article::Decoded(d) => {
                 size += d.web_url.len();
