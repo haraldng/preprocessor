@@ -27,8 +27,7 @@ pub struct NytUniCache<U: UniCache> {
     news_desk_cache: U,
     section_cache: U,
     material_cache: U,
-    main_headline_cache: U,
-    print_headline_cache: U,
+    headline_cache: U,
     by_cache: U,
 }
 
@@ -43,8 +42,7 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
             news_desk_cache: U::new(capacity),
             section_cache: U::new(capacity),
             material_cache: U::new(capacity),
-            main_headline_cache: U::new(capacity),
-            print_headline_cache: U::new(capacity),
+            headline_cache: U::new(capacity),
             by_cache: U::new(capacity)
         }
     }
@@ -68,8 +66,8 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
                 let news_desk = Self::try_encode(&me.news_desk, &mut self.news_desk_cache);
                 let section_name = Self::try_encode(&me.section_name, &mut self.section_cache);
                 let type_of_material = Self::try_encode(&me.type_of_material, &mut self.material_cache);
-                let main_headline = Self::try_encode_vec(me.main_headline, &mut self.main_headline_cache);
-                let print_headline = Self::try_encode_vec(me.print_headline, &mut self.print_headline_cache);
+                let main_headline = Self::try_encode_vec(me.main_headline, &mut self.headline_cache);
+                let print_headline = Self::try_encode_vec(me.print_headline, &mut self.headline_cache);
                 let by = Self::try_encode_vec(me.by, &mut self.by_cache);
                 let encoded = EncodedArticle {
                     web_url,
@@ -108,8 +106,8 @@ impl<U: UniCache> OmniCache<Article, U> for NytUniCache<U> {
                 let news_desk = Self::try_decode(me.news_desk, &mut self.news_desk_cache);
                 let section_name = Self::try_decode(me.section_name, &mut self.section_cache);
                 let type_of_material = Self::try_decode(me.type_of_material, &mut self.material_cache);
-                let main_headline = Self::try_decode_vec(me.main_headline, &mut self.main_headline_cache, " ");
-                let print_headline = Self::try_decode_vec(me.print_headline, &mut self.print_headline_cache, " ");
+                let main_headline = Self::try_decode_vec(me.main_headline, &mut self.headline_cache, " ");
+                let print_headline = Self::try_decode_vec(me.print_headline, &mut self.headline_cache, " ");
                 let by = Self::try_decode_vec(me.by, &mut self.by_cache, " ");
 
                 let m = RawArticle {
