@@ -1,5 +1,6 @@
 use crate::cache::unicache::UniCache;
 use lfu_cache::LfuCache;
+use std::fmt::{Debug, Formatter};
 
 enum Role {
     Encoder,
@@ -11,6 +12,12 @@ pub struct LfuUniCache {
     role: Role,
     encoder_cache: LfuCache<String, u8>,
     decoder_cache: LfuCache<u8, String>,
+}
+
+impl Debug for LfuUniCache {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
+        Result::Ok(())
+    }
 }
 
 impl UniCache for LfuUniCache {
