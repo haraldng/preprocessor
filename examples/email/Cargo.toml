@@ -15,8 +15,8 @@ strum = "0.24.1"
 strum_macros = "0.24.3"
 csv = "1.1.6"
 serde = "1.0.152"
-preprocessor = { path = "../.." }
-omnipaxos_core = { path = "../../../omnipaxos/omnipaxos_core", features = ["batch_accept"] }
+preprocessor   = { git = "https://github.com/haraldng/preprocessor", rev = "c6ce7aa" }
+omnipaxos_core = { git = "https://github.com/haraldng/omnipaxos", rev = "93bdd2a" }
 
 [profile.release]
 lto = true
