@@ -1,6 +1,6 @@
 use histogram::Histogram;
 use preprocess::{NytUniCache};
-// use preprocessor::cache::lecar_cache::LecarUniCache;
+use preprocessor::cache::lecar_cache::LecarUniCache;
 use preprocessor::cache::lfu_cache::LfuUniCache;
 use preprocessor::cache::lru_cache::LruUniCache;
 use preprocessor::cache::unicache::*;
@@ -31,11 +31,10 @@ fn main() {
     let mut lfu_decoder: NytUniCache<LfuUniCache> = NytUniCache::new(CACHE_CAPACITY);
     let mut lfu_res = Results::new(CachePolicy::LFU);
 
-    /*
-        let mut lecar_caches = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
-        let mut lecar_decoders = [false; NUM_CACHES].map(|_| LecarUniCache::new(CACHE_CAPACITY));
-        let mut lecar_res = Results::new(CachePolicy::LECAR);
-    */
+    let mut lecar_cache: NytUniCache<LecarUniCache> = NytUniCache::new(CACHE_CAPACITY);
+    let mut lecar_decoder: NytUniCache<LecarUniCache> = NytUniCache::new(CACHE_CAPACITY);
+    let mut lecar_res = Results::new(CachePolicy::LECAR);
+
     let file = File::open(FILE).unwrap();
     let mut reader = csv::Reader::from_reader(file);
 
@@ -77,17 +76,15 @@ fn main() {
                     lru_res.update(start, encode_end, end, false, compression_rate as usize);
                 }
                 CachePolicy::LECAR => {
-                    /*
-                    continue; // TODO
                     let start = Instant::now();
-                    let (hit, compression_rate) = encode(&mut processed, &mut lecar_caches);
+                    lecar_cache.encode(&mut processed);
                     let encode_end = Instant::now();
-                    // println!("Compressed size: {}", compressed_command.get_size());
-                    decode(&mut processed, &mut lecar_decoders);
+                    // println!("Compressed rate: {}, size: {}, {:?}", compression_rate, processed.get_size(), processed);
+                    let processed_size = processed.get_size() as f32;
+                    lecar_decoder.decode(&mut processed);
                     let end = Instant::now();
-                    lecar_res.update(start, encode_end, end, hit, compression_rate);
-
-                     */
+                    let compression_rate = 100f32 * (1f32 - processed_size / raw_size);
+                    lecar_res.update(start, encode_end, end, false, compression_rate as usize);
                 }
             }
             assert_eq!(
@@ -121,7 +118,7 @@ fn main() {
             },
             CachePolicy::LRU => println!("{}", lru_res),
             CachePolicy::LECAR => {
-                // println!("{}", lecar_res)
+                println!("{}", lecar_res)
             }
         }
     }
