@@ -193,9 +193,9 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 [[package]]
 name = "omnipaxos_core"
 version = "0.1.0"
-source = "git+https://github.com/haraldng/omnipaxos?rev=93bdd2a#93bdd2a70a6110b1210b3da44d653aa53a6dbdb7"
+source = "git+https://github.com/haraldng/omnipaxos?branch=unicache#9ca72a775baa71a6d1dc3e716f298f994ef4df7a"
 dependencies = [
- "preprocessor",
+ "preprocessor 0.1.0 (git+https://github.com/haraldng/preprocessor?rev=fc7f475)",
  "serde",
  "serde_json",
 ]
@@ -215,7 +215,25 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 [[package]]
 name = "preprocessor"
 version = "0.1.0"
-source = "git+https://github.com/haraldng/preprocessor?rev=c6ce7aa#c6ce7aad6ef0ffcabe3f38107e47489c76ddd65b"
+source = "git+https://github.com/haraldng/preprocessor?branch=new-datasets#394f60472336413c6890fcb2f406b5f087919fd8"
+dependencies = [
+ "csv",
+ "histogram",
+ "indexmap",
+ "lazy_static",
+ "lecar",
+ "lfu_cache",
+ "lru",
+ "regex",
+ "serde",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
+name = "preprocessor"
+version = "0.1.0"
+source = "git+https://github.com/haraldng/preprocessor?rev=fc7f475#fc7f47580636deff09d31d9b68223dbb08ef7c9d"
 dependencies = [
  "csv",
  "histogram",
@@ -404,7 +422,7 @@ dependencies = [
  "lfu_cache",
  "lru",
  "omnipaxos_core",
- "preprocessor",
+ "preprocessor 0.1.0 (git+https://github.com/haraldng/preprocessor?branch=new-datasets)",
  "serde",
  "strum",
  "strum_macros",
