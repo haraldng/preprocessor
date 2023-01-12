@@ -5,6 +5,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt::{Debug, Formatter};
 
+const THRESHOLD: usize = 500;
 const SEPARATOR: char = '#';
 const RULES: [&str; 2] = [
     r#"('\d+\\.*?')"#, // hash values
@@ -72,6 +73,9 @@ impl<U: UniCache> OmniCache<Query, U> for BustrackerUniCache<U> {
     }
 
     fn encode(&mut self, data: &mut Query) {
+        if data.get_size() > THRESHOLD {
+            return;
+        }
         // split sql into template and parameters
         let query = std::mem::take(data);
         match query {
@@ -108,7 +112,7 @@ impl<U: UniCache> OmniCache<Query, U> for BustrackerUniCache<U> {
                 let decoded = merge_query(template, parameters);
                 *data = Query::Decoded(decoded);
             }
-            _ => unimplemented!(),
+            _ => *data = query,
         }
     }
 }
@@ -117,7 +121,7 @@ impl<U: UniCache> OmniCache<Query, U> for BustrackerUniCache<U> {
 // A query template contains only the operations but no values
 // All parameters are connected as a string by comma
 pub fn split_query(query: String) -> (String, Vec<String>) {
-    let mut bitmap: Vec<bool> = vec![false; query.len()];
+    let mut bitmap = [false; THRESHOLD];
     let mut indice_pairs = Vec::with_capacity(50);
     for re in REGEX_SETS.iter() {
         for (index, mat) in query.match_indices(re) {
@@ -128,23 +132,21 @@ pub fn split_query(query: String) -> (String, Vec<String>) {
                     *bitmap_entry = true;
                 }
             }
-
             indice_pairs.push((index, mat));
         }
     }
-    let mut template = query.to_string();
-    for re in REGEX_SETS.iter() {
-        template = re.replace_all(&template, SEPARATOR.to_string()).to_string();
-    }
-
     indice_pairs.sort_by_key(|p| p.0);
     // println!("indice_pairs: {:?}", indice_pairs);
 
     // println!("template: {:?}", template);
     let parameters = indice_pairs
-        .iter()
+        .into_iter()
         .map(|p| p.1.to_string())
         .collect();
+    let mut template = query;
+    for re in REGEX_SETS.iter() {
+        template = re.replace_all(&template, SEPARATOR.to_string()).to_string();
+    }
     // println!("parameters: {:?}", parameters);
 
     (template, parameters)
@@ -154,7 +156,7 @@ pub fn split_query(query: String) -> (String, Vec<String>) {
 // There should be the exact number of parameters to fill in
 pub fn merge_query(template: String, parameters: Vec<String>) -> String {
     if parameters.is_empty() {
-        return template.to_string();
+        return template;
     }
     let num_parameters = parameters.len();
     let parts = template.split(SEPARATOR).collect::<Vec<_>>();
@@ -167,11 +169,13 @@ pub fn merge_query(template: String, parameters: Vec<String>) -> String {
         parameters
     );
     */
-    let mut query = String::with_capacity(template.len() + num_parameters);
-    for i in 0..num_parameters {
+    let mut query = String::with_capacity(THRESHOLD);
+    // let query = concat_string!("", parts, parameters);
+
+    for (i, param) in parameters.iter().enumerate() {
         query.push_str(parts[i]);
-        query.push_str(&parameters[i]);
+        query.push_str(param);
     }
-    query.push_str(parts[num_parameters]);
+    query.push_str(parts[parameters.len()]);
     query
 }

@@ -70,18 +70,18 @@ dependencies = [
 
 [[package]]
 name = "get-size"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffff7b577402f46b6e0069ae9c31a7859ab3f2abe7ff0fb614fe6441a1d6c306"
+checksum = "f26b72209bdcd38f3fdf606f37658229b55acc3780d9c5456613a7fed149bc1b"
 dependencies = [
  "get-size-derive",
 ]
 
 [[package]]
 name = "get-size-derive"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "316da74ccd236d0915a5793f3cb37b1154cc41857373d9a7334053294c933f70"
+checksum = "2cef24d44f3b8d0c1e16dc10c2d7272085c1643c907b5e2db43d689f2b4eb08b"
 dependencies = [
  "quote",
  "syn",
@@ -193,9 +193,9 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 [[package]]
 name = "omnipaxos_core"
 version = "0.1.0"
-source = "git+https://github.com/haraldng/omnipaxos?branch=unicache#9ca72a775baa71a6d1dc3e716f298f994ef4df7a"
+source = "git+https://github.com/haraldng/omnipaxos?branch=unicache#981cff5ef8b826a1410e8d9e02ddf2f7f27eea87"
 dependencies = [
- "preprocessor 0.1.0 (git+https://github.com/haraldng/preprocessor?rev=fc7f475)",
+ "preprocessor",
  "serde",
  "serde_json",
 ]
@@ -215,25 +215,7 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 [[package]]
 name = "preprocessor"
 version = "0.1.0"
-source = "git+https://github.com/haraldng/preprocessor?branch=new-datasets#394f60472336413c6890fcb2f406b5f087919fd8"
-dependencies = [
- "csv",
- "histogram",
- "indexmap",
- "lazy_static",
- "lecar",
- "lfu_cache",
- "lru",
- "regex",
- "serde",
- "strum",
- "strum_macros",
-]
-
-[[package]]
-name = "preprocessor"
-version = "0.1.0"
-source = "git+https://github.com/haraldng/preprocessor?rev=fc7f475#fc7f47580636deff09d31d9b68223dbb08ef7c9d"
+source = "git+https://github.com/haraldng/preprocessor?branch=new-datasets#8709f52234fe1375086663c36ed1d41ba58ad19e"
 dependencies = [
  "csv",
  "histogram",
@@ -423,7 +405,7 @@ dependencies = [
  "lfu_cache",
  "lru",
  "omnipaxos_core",
- "preprocessor 0.1.0 (git+https://github.com/haraldng/preprocessor?branch=new-datasets)",
+ "preprocessor",
  "regex",
  "serde",
  "strum",
